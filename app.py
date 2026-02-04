@@ -13,7 +13,42 @@ st.set_page_config(
 )
 
 # =============================
-# SIDEBAR NAVEGAÇÃO (ADICIONADO)
+# LOGIN (ADICIONADO)
+# =============================
+
+USUARIOS = {
+    "admin": "1234",
+    "pedro": "compras2026"
+}
+
+if "logado" not in st.session_state:
+    st.session_state.logado = False
+
+def tela_login():
+    st.title("🔐 Login")
+
+    user = st.text_input("Usuário")
+    senha = st.text_input("Senha", type="password")
+
+    if st.button("Entrar"):
+        if user in USUARIOS and USUARIOS[user] == senha:
+            st.session_state.logado = True
+            st.success("Login realizado!")
+            st.rerun()
+        else:
+            st.error("Usuário ou senha inválidos")
+
+if not st.session_state.logado:
+    tela_login()
+    st.stop()
+
+# Logout na sidebar
+if st.sidebar.button("🚪 Logout"):
+    st.session_state.logado = False
+    st.rerun()
+
+# =============================
+# SIDEBAR NAVEGAÇÃO
 # =============================
 pagina = st.sidebar.radio(
     "📁 Menu",
@@ -26,7 +61,7 @@ if pagina == "Gestão de Insumos":
     st.stop()
 
 # =============================
-# SEU CÓDIGO ORIGINAL CONTINUA
+# SEU CÓDIGO ORIGINAL
 # =============================
 
 ARQ="dados_faturas.json"
@@ -36,9 +71,7 @@ COLUNAS=[
 "codigo_servico","data_abertura","codigo_pedido","data_chamado"
 ]
 
-# =============================
 # Persistência
-# =============================
 def carregar():
     if os.path.exists(ARQ):
         with open(ARQ,"r") as f:
@@ -64,9 +97,7 @@ if "mostrar_nova" not in st.session_state:
 
 df=st.session_state.df
 
-# =============================
 # SLA
-# =============================
 hoje=pd.Timestamp.today()
 
 def sla(row):
@@ -84,12 +115,10 @@ if not df.empty:
     df["vencimento"]=pd.to_datetime(df["vencimento"],errors="coerce")
     df["valor"]=pd.to_numeric(df["valor"],errors="coerce")
 
-# =============================
-# DASHBOARD
-# =============================
+# Dashboard
 st.title("📊 Dashboard de Faturas")
 
-# ---------- FILTROS ----------
+# Filtros
 cfa, cfb, cfc = st.columns(3)
 
 with cfa:
@@ -122,19 +151,19 @@ if status_sel!="Todos":
 if sla_sel!="Todos":
     df_view=df_view[df_view["sla"]==sla_sel]
 
-# ---------- ORDENAÇÃO ----------
+# Ordenação
 prioridade={"vencido":0,"vence em breve":1,"no prazo":2,"concluido":3}
 if not df_view.empty:
     df_view["ord"]=df_view["sla"].map(prioridade)
     df_view=df_view.sort_values(["ord","vencimento"])
 
-# ---------- ALERTA ----------
+# Alerta
 vencidos=df_view[df_view["sla"]=="vencido"]
 if not vencidos.empty:
     soma=vencidos["valor"].sum()
     st.error(f"⚠️ {len(vencidos)} faturas vencidas somando R$ {soma:,.2f}")
 
-# ---------- CARDS ----------
+# Cards
 def card_total(titulo,valor,cor):
     st.markdown(f"""
     <div style="padding:18px;border-radius:14px;background:{cor};color:white">
@@ -178,7 +207,7 @@ if not df_view.empty:
     with s3: card_sla("No Prazo",prazo,pv(prazo),"#1e88e5")
     with s4: card_sla("Concluído",conc,pv(conc),"#43a047")
 
-# ---------- EXPORTAÇÃO ----------
+# Exportação
 if not df_view.empty:
     output=BytesIO()
     df_view.to_excel(output,index=False)
@@ -188,22 +217,19 @@ if not df_view.empty:
         file_name="faturas.xlsx"
     )
 
-# ---------- GRÁFICO ----------
+# Gráfico
 if not df_view.empty:
     graf=df_view.groupby("fornecedor")["valor"].sum().sort_values(ascending=False)
     st.subheader("📊 Valor por Fornecedor")
     st.bar_chart(graf)
 
-# =============================
-# REGISTROS
-# =============================
+# Registros
 st.divider()
 st.subheader("📁 Registros")
 
 if not df_view.empty:
     for i,row in df_view.iterrows():
         with st.expander(f"📄 {row['fornecedor']} — {row['vencimento'].date()}"):
-
             st.write(f"**Status:** {row['status']}")
             st.write(f"**Fatura:** {row['fatura']}")
             st.write(f"**Valor:** R$ {row['valor']:,.2f}")
@@ -225,9 +251,7 @@ if not df_view.empty:
                 salvar(df)
                 st.rerun()
 
-# =============================
-# WIZARD
-# =============================
+# Wizard
 st.divider()
 
 if st.button("Nova Fatura +"):
@@ -238,7 +262,6 @@ if st.session_state.mostrar_nova:
     st.subheader("🧾 Nova Fatura")
 
     if st.session_state.etapa==1:
-
         status=st.selectbox("Status",["Em andamento","Concluído"])
         forn=st.text_input("Fornecedor")
         fat=st.text_input("Fatura")
@@ -256,7 +279,6 @@ if st.session_state.mostrar_nova:
             st.rerun()
 
     elif st.session_state.etapa==2:
-
         cod=st.text_input("Código Serviço")
         dab=st.date_input("Data abertura",date.today())
 
@@ -271,7 +293,6 @@ if st.session_state.mostrar_nova:
             st.rerun()
 
     elif st.session_state.etapa==3:
-
         ped=st.text_input("Código Pedido")
         dch=st.date_input("Data chamado",date.today())
 
