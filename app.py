@@ -23,14 +23,19 @@ FORNECEDORES_PADRAO = [
 ]
 
 # =========================
-# ESTRUTURA PADRÃO
+# LISTA DE MESES
+# =========================
+MESES = [
+    "JANEIRO/2026", "FEVEREIRO/2026", "MARÇO/2026", "ABRIL/2026", "MAIO/2026", "JUNHO/2026",
+    "JULHO/2026", "AGOSTO/2026", "SETEMBRO/2026", "OUTUBRO/2026", "NOVEMBRO/2026", "DEZEMBRO/2026"
+]
+
+# =========================
+# ESTRUTURA DO DATAFRAME
 # =========================
 COLUNAS_PADRAO = [
     "Fornecedor",
-    "Mes_Competencia",
-    "Mes_Vencimento",
-    "Mes_Referencia",
-    "Valor",
+    "Ultimo_Vencimento",
     "Status"
 ]
 
@@ -49,7 +54,7 @@ if "editar_index" not in st.session_state:
 # =========================
 # TÍTULO
 # =========================
-st.title("🧾 Controle Geral de Faturas")
+st.title("🧾 Controle de Faturas")
 
 # =========================
 # BOTÃO NOVO REGISTRO
@@ -66,10 +71,7 @@ if st.session_state.mostrar_form:
     with st.form("form_fatura", clear_on_submit=True):
 
         fornecedor = st.selectbox("Fornecedor", FORNECEDORES_PADRAO)
-        competencia = st.text_input("Mês de Competência (ex: JAN/2026)")
-        vencimento = st.text_input("Mês de Vencimento (ex: FEV/2026)")
-        referencia = st.text_input("Mês de Referência (ex: JAN/2026)")
-        valor = st.number_input("Valor", min_value=0.0, format="%.2f")
+        vencimento = st.selectbox("Último Vencimento", MESES)
         status = st.selectbox("Status", ["CONCLUÍDO", "EM ANDAMENTO"])
 
         salvar = st.form_submit_button("Salvar")
@@ -78,23 +80,21 @@ if st.session_state.mostrar_form:
 
             novo = {
                 "Fornecedor": fornecedor,
-                "Mes_Competencia": competencia,
-                "Mes_Vencimento": vencimento,
-                "Mes_Referencia": referencia,
-                "Valor": valor,
+                "Ultimo_Vencimento": vencimento,
                 "Status": status
             }
 
+            # Se estiver editando
             if st.session_state.editar_index is not None:
                 st.session_state.dados.loc[
                     st.session_state.editar_index
                 ] = novo
                 st.session_state.editar_index = None
+
             else:
+                # Atualiza se fornecedor já existir
                 filtro = (
-                    (st.session_state.dados["Fornecedor"] == fornecedor) &
-                    (st.session_state.dados["Mes_Competencia"] == competencia) &
-                    (st.session_state.dados["Mes_Referencia"] == referencia)
+                    st.session_state.dados["Fornecedor"] == fornecedor
                 )
 
                 if filtro.any():
@@ -111,7 +111,7 @@ if st.session_state.mostrar_form:
 st.divider()
 
 # =========================
-# CARDS SIMPLIFICADOS
+# CARDS NO TOPO
 # =========================
 df = st.session_state.dados
 
@@ -121,22 +121,11 @@ if not df.empty:
 
     colunas = st.columns(4)
 
-    # Agrupar por fornecedor
-    fornecedores = df["Fornecedor"].unique()
-
-    for idx, fornecedor in enumerate(fornecedores):
+    for idx, row in df.iterrows():
 
         coluna = colunas[idx % 4]
-        df_fornecedor = df[df["Fornecedor"] == fornecedor]
 
-        # Últimos vencimentos (lista)
-        vencimentos = df_fornecedor["Mes_Vencimento"].tolist()
-        vencimentos_texto = " | ".join(vencimentos)
-
-        # Último status registrado
-        ultimo_status = df_fornecedor.iloc[-1]["Status"]
-
-        if ultimo_status == "CONCLUÍDO":
+        if row["Status"] == "CONCLUÍDO":
             cor = "#28a745"
             texto_cor = "white"
         else:
@@ -152,11 +141,10 @@ if not df.empty:
                 margin-bottom:15px;
                 font-weight:600;
                 color:{texto_cor};
-                font-size:14px;">
-                {fornecedor}<br><br>
-                Últimos Vencimentos:<br>
-                {vencimentos_texto}<br><br>
-                {ultimo_status}
+                font-size:16px;">
+                {row['Fornecedor']}<br><br>
+                Último Vencimento: {row['Ultimo_Vencimento']}<br><br>
+                {row['Status']}
             </div>
             """,
             unsafe_allow_html=True
@@ -165,7 +153,7 @@ if not df.empty:
 st.divider()
 
 # =========================
-# LISTA DETALHADA (INALTERADA)
+# LISTA ABAIXO
 # =========================
 st.subheader("Lista Completa")
 
@@ -178,10 +166,7 @@ if not df.empty:
         with col1:
             st.write(
                 f"**{row['Fornecedor']}** | "
-                f"Comp: {row['Mes_Competencia']} | "
-                f"Venc: {row['Mes_Vencimento']} | "
-                f"Ref: {row['Mes_Referencia']} | "
-                f"R$ {row['Valor']:,.2f} | "
+                f"Vencimento: {row['Ultimo_Vencimento']} | "
                 f"{row['Status']}"
             )
 
