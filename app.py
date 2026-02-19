@@ -145,6 +145,9 @@ with aba2:
 
     st.title("📑 Controle de Faturas")
 
+    if "mostrar_form" not in st.session_state:
+        st.session_state.mostrar_form = True
+
     if not st.session_state.mostrar_form:
         if st.button("➕ Novo Registro"):
             st.session_state.mostrar_form = True
@@ -152,45 +155,43 @@ with aba2:
 
     if st.session_state.mostrar_form:
 
-        fornecedor = st.text_input("Fornecedor", key="fornecedor")
-        competencia = st.date_input(
-            "Competência",
-            format="DD/MM/YYYY",
-            key="competencia"
-        )
-        vencimento = st.date_input(
-            "Data de Vencimento",
-            format="DD/MM/YYYY",
-            key="vencimento"
-        )
-        valor = st.number_input(
-            "Valor",
-            min_value=0.0,
-            format="%.2f",
-            key="valor"
-        )
-        pago = st.checkbox("Já está pago?", key="pago")
+        with st.form("form_fatura", clear_on_submit=True):
 
-        if st.button("Salvar"):
+            fornecedor = st.text_input("Fornecedor")
+            competencia = st.date_input(
+                "Competência",
+                format="DD/MM/YYYY"
+            )
+            vencimento = st.date_input(
+                "Data de Vencimento",
+                format="DD/MM/YYYY"
+            )
+            valor = st.number_input(
+                "Valor",
+                min_value=0.0,
+                format="%.2f"
+            )
+            pago = st.checkbox("Já está pago?")
 
-            if fornecedor == "":
-                st.warning("Informe o nome do fornecedor.")
-            else:
-                inserir_fatura(
-                    fornecedor=fornecedor,
-                    competencia=competencia.strftime("%Y-%m-%d"),
-                    vencimento=vencimento.strftime("%Y-%m-%d"),
-                    valor=valor,
-                    pago=1 if pago else 0
-                )
+            salvar = st.form_submit_button("Salvar")
 
-                st.success("Fatura cadastrada com sucesso.")
+            if salvar:
 
-                # Limpa campos
-                st.session_state.fornecedor = ""
-                st.session_state.valor = 0.0
-                st.session_state.pago = False
+                if fornecedor == "":
+                    st.warning("Informe o nome do fornecedor.")
+                else:
+                    inserir_fatura(
+                        fornecedor=fornecedor,
+                        competencia=competencia.strftime("%Y-%m-%d"),
+                        vencimento=vencimento.strftime("%Y-%m-%d"),
+                        valor=valor,
+                        pago=1 if pago else 0
+                    )
 
-                # Esconde formulário
-                st.session_state.mostrar_form = False
-                st.rerun()
+                    st.success("Fatura cadastrada com sucesso.")
+
+                    # Esconde o formulário após salvar
+                    st.session_state.mostrar_form = False
+                    st.rerun()
+
+
