@@ -11,6 +11,25 @@ st.set_page_config(page_title="Controle de Fornecedores", layout="wide")
 ARQUIVO_DADOS = "dados_fornecedores.json"
 
 # =========================
+# LISTA PADRÃO DE FORNECEDORES
+# =========================
+FORNECEDORES_PADRAO = [
+    "E-SALES",
+    "PAES E DOCES JARDIM THELMA",
+    "PALLEFORT COMERCIO",
+    "BRASIL SERVIÇOS",
+    "EZ TOOLS",
+    "NISSEYS",
+    "FUSION",
+    "BUONNY",
+    "KM STAFF",
+    "PANIFICADORA MM",
+    "NUNES TRANSPORTES",
+    "THEODORO GÁS",
+    "BERKLEY"
+]
+
+# =========================
 # FUNÇÕES DE PERSISTÊNCIA
 # =========================
 def carregar_dados():
@@ -35,22 +54,6 @@ df = st.session_state.df
 # =========================
 # LISTA DE MESES FIXA
 # =========================
-FORNECEDORES_PADRAO = [
-    "E-SALES",
-    "PAES E DOCES JARDIM THELMA",
-    "PALLEFORT COMERCIO",
-    "BRASIL SERVIÇOS",
-    "EZ TOOLS",
-    "NISSEYS",
-    "FUSION",
-    "BUONNY",
-    "KM STAFF",
-    "PANIFICADORA MM",
-    "NUNES TRANSPORTES",
-    "THEODORO GÁS",
-    "BERKLEY"
-]
-
 MESES = [
     "JAN/2026", "FEV/2026", "MAR/2026", "ABR/2026",
     "MAI/2026", "JUN/2026", "JUL/2026", "AGO/2026",
@@ -65,7 +68,7 @@ st.title("Controle Visual de Fornecedores")
 col1, col2, col3, col4 = st.columns(4)
 
 with col1:
-    nome = st.text_input("Nome")
+    nome = st.selectbox("Nome", FORNECEDORES_PADRAO)
 
 with col2:
     ultimo_vencimento = st.selectbox("Último Vencimento", MESES)
@@ -77,17 +80,16 @@ with col4:
     status = st.selectbox("Status", ["CONCLUÍDO", "EM ANDAMENTO"])
 
 if st.button("Adicionar"):
-    if nome.strip() != "":
-        novo = pd.DataFrame([{
-            "Nome": nome,
-            "Último Vencimento": ultimo_vencimento,
-            "Valor": valor,
-            "Status": status
-        }])
+    novo = pd.DataFrame([{
+        "Nome": nome,
+        "Último Vencimento": ultimo_vencimento,
+        "Valor": valor,
+        "Status": status
+    }])
 
-        st.session_state.df = pd.concat([st.session_state.df, novo], ignore_index=True)
-        salvar_dados(st.session_state.df)
-        st.success("Fornecedor adicionado com sucesso!")
+    st.session_state.df = pd.concat([st.session_state.df, novo], ignore_index=True)
+    salvar_dados(st.session_state.df)
+    st.success("Fornecedor adicionado com sucesso!")
 
 # =========================
 # VISUALIZAÇÃO COM REGRA DE COR
@@ -108,4 +110,3 @@ if not st.session_state.df.empty:
     )
 else:
     st.info("Nenhum fornecedor cadastrado ainda.")
-
