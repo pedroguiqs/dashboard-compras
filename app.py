@@ -1,17 +1,12 @@
 import streamlit as st
 import pandas as pd
 import sqlite3
-from datetime import datetime
 
 # ==========================
 # CONFIGURAÇÃO
 # ==========================
 
-st.set_page_config(
-    page_title="Gestão de Fornecedores",
-    layout="wide"
-)
-
+st.set_page_config(page_title="Gestão de Fornecedores", layout="wide")
 DB_NAME = "fornecedores.db"
 
 # ==========================
@@ -60,20 +55,33 @@ def carregar_faturas():
     return df
 
 
+def atualizar_fatura(id_fatura, fornecedor, competencia, vencimento, valor, pago):
+    conn = conectar()
+    cursor = conn.cursor()
+    cursor.execute("""
+        UPDATE faturas
+        SET fornecedor=?, competencia=?, vencimento=?, valor=?, pago=?
+        WHERE id=?
+    """, (fornecedor, competencia, vencimento, valor, pago, id_fatura))
+    conn.commit()
+    conn.close()
+
+
+def deletar_fatura(id_fatura):
+    conn = conectar()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM faturas WHERE id=?", (id_fatura,))
+    conn.commit()
+    conn.close()
+
 # ==========================
-# LÓGICA DE STATUS
+# STATUS
 # ==========================
 
 def classificar_status(row):
-    hoje = pd.Timestamp.today().normalize()
-
     if row["pago"] == 1:
-        return "PAGO", "#2ecc71"
-
-    if row["vencimento"] < hoje:
-        return "ATRASADO", "#e74c3c"
-
-    return "PENDENTE", "#f39c12"
+        return "PAGO", "#2ecc71"  # Verde
+    return "EM ANDAMENTO", "#f1c40f"  # Amarelo
 
 
 def ultima_fatura_por_fornecedor(df):
@@ -84,16 +92,11 @@ def ultima_fatura_por_fornecedor(df):
         .reset_index(drop=True)
     )
 
-
 # ==========================
 # INICIALIZAÇÃO
 # ==========================
 
 criar_tabela()
-
-if "mostrar_form" not in st.session_state:
-    st.session_state.mostrar_form = True
-
 df = carregar_faturas()
 
 aba1, aba2 = st.tabs(["📊 Dashboard", "📑 Controle de Faturas"])
@@ -121,13 +124,13 @@ with aba1:
                     <div style="
                         padding:20px;
                         border-radius:12px;
-                        background-color: var(--background-color);
                         border:1px solid #ccc;
                         border-left:8px solid {cor};
                         margin-bottom:20px;
-                        color: var(--text-color);
+                        background-color: white;
+                        color: black;
                     ">
-                        <h4 style="margin-bottom:10px;">{row['fornecedor']}</h4>
+                        <h4>{row['fornecedor']}</h4>
                         <p><b>Última competência:</b> {row['competencia'].strftime('%d/%m/%Y')}</p>
                         <p><b>Vencimento:</b> {row['vencimento'].strftime('%d/%m/%Y')}</p>
                         <p><b>Valor:</b> R$ {row['valor']:,.2f}</p>
@@ -145,53 +148,64 @@ with aba2:
 
     st.title("📑 Controle de Faturas")
 
-    if "mostrar_form" not in st.session_state:
-        st.session_state.mostrar_form = True
+    # ---- Cadastro ----
 
-    if not st.session_state.mostrar_form:
-        if st.button("➕ Novo Registro"):
-            st.session_state.mostrar_form = True
+    with st.form("form_fatura", clear_on_submit=True):
+
+        fornecedor = st.text_input("Fornecedor")
+        competencia = st.date_input("Competência", format="DD/MM/YYYY")
+        vencimento = st.date_input("Vencimento", format="DD/MM/YYYY")
+        valor = st.number_input("Valor", min_value=0.0, format="%.2f")
+        pago = st.checkbox("Pago?")
+
+        salvar = st.form_submit_button("Salvar")
+
+        if salvar:
+            inserir_fatura(
+                fornecedor,
+                competencia.strftime("%Y-%m-%d"),
+                vencimento.strftime("%Y-%m-%d"),
+                valor,
+                1 if pago else 0
+            )
+            st.success("Fatura cadastrada com sucesso.")
             st.rerun()
 
-    if st.session_state.mostrar_form:
+    st.divider()
 
-        with st.form("form_fatura", clear_on_submit=True):
+    # ---- Tabela com edição e remoção ----
 
-            fornecedor = st.text_input("Fornecedor")
-            competencia = st.date_input(
-                "Competência",
-                format="DD/MM/YYYY"
-            )
-            vencimento = st.date_input(
-                "Data de Vencimento",
-                format="DD/MM/YYYY"
-            )
-            valor = st.number_input(
-                "Valor",
-                min_value=0.0,
-                format="%.2f"
-            )
-            pago = st.checkbox("Já está pago?")
+    if not df.empty:
 
-            salvar = st.form_submit_button("Salvar")
+        st.subheader("Faturas Registradas")
 
-            if salvar:
+        for _, row in df.iterrows():
 
-                if fornecedor == "":
-                    st.warning("Informe o nome do fornecedor.")
-                else:
-                    inserir_fatura(
-                        fornecedor=fornecedor,
-                        competencia=competencia.strftime("%Y-%m-%d"),
-                        vencimento=vencimento.strftime("%Y-%m-%d"),
-                        valor=valor,
-                        pago=1 if pago else 0
-                    )
+            with st.expander(f"{row['fornecedor']} - {row['competencia'].strftime('%d/%m/%Y')}"):
 
-                    st.success("Fatura cadastrada com sucesso.")
+                novo_fornecedor = st.text_input("Fornecedor", row["fornecedor"], key=f"f_{row['id']}")
+                nova_comp = st.date_input("Competência", row["competencia"], format="DD/MM/YYYY", key=f"c_{row['id']}")
+                novo_venc = st.date_input("Vencimento", row["vencimento"], format="DD/MM/YYYY", key=f"v_{row['id']}")
+                novo_valor = st.number_input("Valor", value=float(row["valor"]), format="%.2f", key=f"val_{row['id']}")
+                novo_pago = st.checkbox("Pago?", value=bool(row["pago"]), key=f"p_{row['id']}")
 
-                    # Esconde o formulário após salvar
-                    st.session_state.mostrar_form = False
-                    st.rerun()
+                col1, col2 = st.columns(2)
 
+                with col1:
+                    if st.button("Atualizar", key=f"up_{row['id']}"):
+                        atualizar_fatura(
+                            row["id"],
+                            novo_fornecedor,
+                            nova_comp.strftime("%Y-%m-%d"),
+                            novo_venc.strftime("%Y-%m-%d"),
+                            novo_valor,
+                            1 if novo_pago else 0
+                        )
+                        st.success("Atualizado com sucesso.")
+                        st.rerun()
 
+                with col2:
+                    if st.button("Remover", key=f"del_{row['id']}"):
+                        deletar_fatura(row["id"])
+                        st.warning("Fatura removida.")
+                        st.rerun()
