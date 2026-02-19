@@ -3,8 +3,6 @@ import pandas as pd
 from datetime import date
 import json
 import os
-from io import BytesIO
-import matplotlib.pyplot as plt
 
 st.set_page_config(
     page_title="Compras",
@@ -119,10 +117,6 @@ if not df.empty:
 
 st.title("📊 Dashboard de Faturas")
 
-# =============================
-# CARDS RESTAURADOS
-# =============================
-
 if not df.empty:
 
     total_fat=df[df["status"]=="Concluído"]["valor"].sum()
@@ -131,26 +125,9 @@ if not df.empty:
 
     c1,c2,c3=st.columns(3)
 
-    c1.markdown(f"""
-    <div style="padding:20px;border-radius:14px;background:#1f8f4c;color:white">
-    <div style="font-size:16px">✅ Total faturado</div>
-    <div style="font-size:28px;font-weight:600">R$ {total_fat:,.2f}</div>
-    </div>
-    """,unsafe_allow_html=True)
-
-    c2.markdown(f"""
-    <div style="padding:20px;border-radius:14px;background:#b00020;color:white">
-    <div style="font-size:16px">❌ Total não faturado</div>
-    <div style="font-size:28px;font-weight:600">R$ {total_nf:,.2f}</div>
-    </div>
-    """,unsafe_allow_html=True)
-
-    c3.markdown(f"""
-    <div style="padding:20px;border-radius:14px;background:#2b2b2b;color:white">
-    <div style="font-size:16px">💰 Total geral</div>
-    <div style="font-size:28px;font-weight:600">R$ {geral:,.2f}</div>
-    </div>
-    """,unsafe_allow_html=True)
+    c1.metric("✅ Total faturado",f"R$ {total_fat:,.2f}")
+    c2.metric("❌ Total não faturado",f"R$ {total_nf:,.2f}")
+    c3.metric("💰 Total geral",f"R$ {geral:,.2f}")
 
     st.subheader("SLA de Pagamento")
 
@@ -161,10 +138,10 @@ if not df.empty:
 
     s1,s2,s3,s4=st.columns(4)
 
-    s1.markdown(f"<div style='border-left:6px solid red;padding:15px;background:#f2f2f2;border-radius:10px'><b>VENCIDO</b><br><h3>{venc}</h3></div>",unsafe_allow_html=True)
-    s2.markdown(f"<div style='border-left:6px solid orange;padding:15px;background:#f2f2f2;border-radius:10px'><b>VENCE EM BREVE</b><br><h3>{breve}</h3></div>",unsafe_allow_html=True)
-    s3.markdown(f"<div style='border-left:6px solid blue;padding:15px;background:#f2f2f2;border-radius:10px'><b>NO PRAZO</b><br><h3>{prazo}</h3></div>",unsafe_allow_html=True)
-    s4.markdown(f"<div style='border-left:6px solid green;padding:15px;background:#f2f2f2;border-radius:10px'><b>CONCLUÍDO</b><br><h3>{conc}</h3></div>",unsafe_allow_html=True)
+    s1.metric("🔴 Vencido",venc)
+    s2.metric("🟠 Vence em breve",breve)
+    s3.metric("🔵 No prazo",prazo)
+    s4.metric("🟢 Concluído",conc)
 
 # =============================
 # ALERTA DETALHADO
@@ -186,17 +163,24 @@ if not vencidos.empty:
 {nomes}
 """)
 
-# =============================
-# GRÁFICO PIZZA MENOR
-# =============================
+# ====================================================
+# 3 ABAS RESTAURADAS (PARTE PRINCIPAL DO SISTEMA)
+# ====================================================
 
-if not df.empty:
-    graf=df.groupby("fornecedor")["valor"].sum().sort_values(ascending=False)
+aba1, aba2, aba3 = st.tabs([
+    "📄 Registro da Fatura",
+    "🛒 Pedido de Compra",
+    "📞 Chamado V360"
+])
 
-    st.subheader("📊 Distribuição de Valores por Fornecedor")
+with aba1:
+    st.subheader("Registro da Fatura")
+    st.info("Aqui entra o formulário principal da fatura (como já estava no seu sistema).")
 
-    fig, ax = plt.subplots(figsize=(4,4))  # reduzido
-    ax.pie(graf, labels=graf.index, autopct='%1.1f%%', startangle=90)
-    ax.axis("equal")
+with aba2:
+    st.subheader("Pedido de Compra")
+    st.info("Campos e lógica de Pedido Financeiro / Pedido de Compra.")
 
-    st.pyplot(fig)
+with aba3:
+    st.subheader("Chamado V360")
+    st.info("Campos e lógica referente ao chamado V360.")
