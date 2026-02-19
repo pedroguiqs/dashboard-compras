@@ -23,7 +23,7 @@ FORNECEDORES_PADRAO = [
 ]
 
 # =========================
-# ESTRUTURA PADRÃO DO DATAFRAME
+# ESTRUTURA PADRÃO
 # =========================
 COLUNAS_PADRAO = [
     "Fornecedor",
@@ -34,9 +34,6 @@ COLUNAS_PADRAO = [
     "Status"
 ]
 
-# =========================
-# GARANTIR ESTRUTURA CORRETA
-# =========================
 if "dados" not in st.session_state:
     st.session_state.dados = pd.DataFrame(columns=COLUNAS_PADRAO)
 else:
@@ -88,15 +85,12 @@ if st.session_state.mostrar_form:
                 "Status": status
             }
 
-            # EDIÇÃO
             if st.session_state.editar_index is not None:
                 st.session_state.dados.loc[
                     st.session_state.editar_index
                 ] = novo
                 st.session_state.editar_index = None
-
             else:
-                # REGRA: Atualiza se for mesmo fornecedor + mesma competência + mesma referência
                 filtro = (
                     (st.session_state.dados["Fornecedor"] == fornecedor) &
                     (st.session_state.dados["Mes_Competencia"] == competencia) &
@@ -117,7 +111,7 @@ if st.session_state.mostrar_form:
 st.divider()
 
 # =========================
-# CARDS NO TOPO
+# CARDS SIMPLIFICADOS
 # =========================
 df = st.session_state.dados
 
@@ -127,11 +121,22 @@ if not df.empty:
 
     colunas = st.columns(4)
 
-    for idx, row in df.iterrows():
+    # Agrupar por fornecedor
+    fornecedores = df["Fornecedor"].unique()
+
+    for idx, fornecedor in enumerate(fornecedores):
 
         coluna = colunas[idx % 4]
+        df_fornecedor = df[df["Fornecedor"] == fornecedor]
 
-        if row["Status"] == "CONCLUÍDO":
+        # Últimos vencimentos (lista)
+        vencimentos = df_fornecedor["Mes_Vencimento"].tolist()
+        vencimentos_texto = " | ".join(vencimentos)
+
+        # Último status registrado
+        ultimo_status = df_fornecedor.iloc[-1]["Status"]
+
+        if ultimo_status == "CONCLUÍDO":
             cor = "#28a745"
             texto_cor = "white"
         else:
@@ -148,11 +153,10 @@ if not df.empty:
                 font-weight:600;
                 color:{texto_cor};
                 font-size:14px;">
-                {row['Fornecedor']}<br><br>
-                Competência: {row['Mes_Competencia']}<br>
-                Vencimento: {row['Mes_Vencimento']}<br>
-                Referência: {row['Mes_Referencia']}<br>
-                Valor: R$ {row['Valor']:,.2f}
+                {fornecedor}<br><br>
+                Últimos Vencimentos:<br>
+                {vencimentos_texto}<br><br>
+                {ultimo_status}
             </div>
             """,
             unsafe_allow_html=True
@@ -161,7 +165,7 @@ if not df.empty:
 st.divider()
 
 # =========================
-# LISTA DETALHADA
+# LISTA DETALHADA (INALTERADA)
 # =========================
 st.subheader("Lista Completa")
 
