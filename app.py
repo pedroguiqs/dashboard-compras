@@ -23,17 +23,25 @@ FORNECEDORES_PADRAO = [
 ]
 
 # =========================
-# SESSION STATE
+# ESTRUTURA PADRÃO DO DATAFRAME
+# =========================
+COLUNAS_PADRAO = [
+    "Fornecedor",
+    "Mes_Competencia",
+    "Mes_Vencimento",
+    "Mes_Referencia",
+    "Valor",
+    "Status"
+]
+
+# =========================
+# GARANTIR ESTRUTURA CORRETA
 # =========================
 if "dados" not in st.session_state:
-    st.session_state.dados = pd.DataFrame(columns=[
-        "Fornecedor",
-        "Mes_Competencia",
-        "Mes_Vencimento",
-        "Mes_Referencia",
-        "Valor",
-        "Status"
-    ])
+    st.session_state.dados = pd.DataFrame(columns=COLUNAS_PADRAO)
+else:
+    if list(st.session_state.dados.columns) != COLUNAS_PADRAO:
+        st.session_state.dados = pd.DataFrame(columns=COLUNAS_PADRAO)
 
 if "mostrar_form" not in st.session_state:
     st.session_state.mostrar_form = False
@@ -41,16 +49,21 @@ if "mostrar_form" not in st.session_state:
 if "editar_index" not in st.session_state:
     st.session_state.editar_index = None
 
+# =========================
+# TÍTULO
+# =========================
 st.title("🧾 Controle Geral de Faturas")
 
 # =========================
-# FORMULÁRIO
+# BOTÃO NOVO REGISTRO
 # =========================
-
 if not st.session_state.mostrar_form:
     if st.button("Novo Registro"):
         st.session_state.mostrar_form = True
 
+# =========================
+# FORMULÁRIO
+# =========================
 if st.session_state.mostrar_form:
 
     with st.form("form_fatura", clear_on_submit=True):
@@ -75,7 +88,7 @@ if st.session_state.mostrar_form:
                 "Status": status
             }
 
-            # Se estiver editando
+            # EDIÇÃO
             if st.session_state.editar_index is not None:
                 st.session_state.dados.loc[
                     st.session_state.editar_index
@@ -83,9 +96,7 @@ if st.session_state.mostrar_form:
                 st.session_state.editar_index = None
 
             else:
-                # Regra:
-                # Se já existir mesmo fornecedor + mesma competência + mesma referência
-                # atualiza ao invés de criar novo
+                # REGRA: Atualiza se for mesmo fornecedor + mesma competência + mesma referência
                 filtro = (
                     (st.session_state.dados["Fornecedor"] == fornecedor) &
                     (st.session_state.dados["Mes_Competencia"] == competencia) &
@@ -108,7 +119,6 @@ st.divider()
 # =========================
 # CARDS NO TOPO
 # =========================
-
 df = st.session_state.dados
 
 if not df.empty:
@@ -151,9 +161,8 @@ if not df.empty:
 st.divider()
 
 # =========================
-# LISTA DETALHADA EMBAIXO
+# LISTA DETALHADA
 # =========================
-
 st.subheader("Lista Completa")
 
 if not df.empty:
