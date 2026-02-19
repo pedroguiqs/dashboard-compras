@@ -27,7 +27,12 @@ FORNECEDORES_PADRAO = [
 # =========================
 if "dados" not in st.session_state:
     st.session_state.dados = pd.DataFrame(columns=[
-        "Fornecedor", "Mês", "Valor", "Status"
+        "Fornecedor",
+        "Mes_Competencia",
+        "Mes_Vencimento",
+        "Mes_Referencia",
+        "Valor",
+        "Status"
     ])
 
 if "mostrar_form" not in st.session_state:
@@ -36,127 +41,149 @@ if "mostrar_form" not in st.session_state:
 if "editar_index" not in st.session_state:
     st.session_state.editar_index = None
 
-# =========================
-# ABAS NO TOPO
-# =========================
-aba_dashboard, aba_controle = st.tabs(["Dashboard", "Controle de Faturas"])
+st.title("🧾 Controle Geral de Faturas")
 
 # =========================
-# DASHBOARD
+# FORMULÁRIO
 # =========================
-with aba_dashboard:
 
-    st.title("📊 Dashboard de Faturas")
+if not st.session_state.mostrar_form:
+    if st.button("Novo Registro"):
+        st.session_state.mostrar_form = True
 
-    df = st.session_state.dados
+if st.session_state.mostrar_form:
 
-    if df.empty:
-        st.info("Nenhuma fatura cadastrada ainda.")
-    else:
-        for i, row in df.iterrows():
+    with st.form("form_fatura", clear_on_submit=True):
 
-            if row["Status"] == "CONCLUÍDO":
-                cor = "#28a745"  # Verde
-                texto_cor = "white"
+        fornecedor = st.selectbox("Fornecedor", FORNECEDORES_PADRAO)
+        competencia = st.text_input("Mês de Competência (ex: JAN/2026)")
+        vencimento = st.text_input("Mês de Vencimento (ex: FEV/2026)")
+        referencia = st.text_input("Mês de Referência (ex: JAN/2026)")
+        valor = st.number_input("Valor", min_value=0.0, format="%.2f")
+        status = st.selectbox("Status", ["CONCLUÍDO", "EM ANDAMENTO"])
+
+        salvar = st.form_submit_button("Salvar")
+
+        if salvar:
+
+            novo = {
+                "Fornecedor": fornecedor,
+                "Mes_Competencia": competencia,
+                "Mes_Vencimento": vencimento,
+                "Mes_Referencia": referencia,
+                "Valor": valor,
+                "Status": status
+            }
+
+            # Se estiver editando
+            if st.session_state.editar_index is not None:
+                st.session_state.dados.loc[
+                    st.session_state.editar_index
+                ] = novo
+                st.session_state.editar_index = None
+
             else:
-                cor = "#ffc107"  # Amarelo
-                texto_cor = "black"
+                # Regra:
+                # Se já existir mesmo fornecedor + mesma competência + mesma referência
+                # atualiza ao invés de criar novo
+                filtro = (
+                    (st.session_state.dados["Fornecedor"] == fornecedor) &
+                    (st.session_state.dados["Mes_Competencia"] == competencia) &
+                    (st.session_state.dados["Mes_Referencia"] == referencia)
+                )
 
-            st.markdown(
-                f"""
-                <div style="
-                    background-color:{cor};
-                    padding:20px;
-                    border-radius:12px;
-                    margin-bottom:12px;
-                    font-weight:600;
-                    color:{texto_cor};
-                    font-size:16px;">
-                    {row['Fornecedor']}<br>
-                    {row['Mês']} | R$ {row['Valor']:,.2f}<br>
-                    {row['Status']}
-                </div>
-                """,
-                unsafe_allow_html=True
-            )
-
-# =========================
-# CONTROLE DE FATURAS
-# =========================
-with aba_controle:
-
-    st.title("🧾 Controle de Faturas")
-
-    # Botão Novo Registro
-    if not st.session_state.mostrar_form:
-        if st.button("Novo Registro"):
-            st.session_state.mostrar_form = True
-
-    # FORMULÁRIO
-    if st.session_state.mostrar_form:
-
-        with st.form("form_fatura", clear_on_submit=True):
-
-            fornecedor = st.selectbox("Fornecedor", FORNECEDORES_PADRAO)
-            mes = st.text_input("Mês (ex: JAN/2026)")
-            valor = st.number_input("Valor", min_value=0.0, format="%.2f")
-            status = st.selectbox("Status", ["CONCLUÍDO", "EM ANDAMENTO"])
-
-            salvar = st.form_submit_button("Salvar")
-
-            if salvar:
-
-                novo_registro = {
-                    "Fornecedor": fornecedor,
-                    "Mês": mes,
-                    "Valor": valor,
-                    "Status": status
-                }
-
-                # Se estiver editando
-                if st.session_state.editar_index is not None:
-                    st.session_state.dados.loc[
-                        st.session_state.editar_index
-                    ] = novo_registro
-                    st.session_state.editar_index = None
+                if filtro.any():
+                    st.session_state.dados.loc[filtro, :] = novo
                 else:
-                    # Permite duplicidade no mesmo mês (ex: BUONNY)
                     st.session_state.dados = pd.concat(
-                        [st.session_state.dados, pd.DataFrame([novo_registro])],
+                        [st.session_state.dados, pd.DataFrame([novo])],
                         ignore_index=True
                     )
 
-                st.session_state.mostrar_form = False
-                st.rerun()
+            st.session_state.mostrar_form = False
+            st.rerun()
 
-    st.divider()
+st.divider()
 
-    # LISTAGEM COM EDITAR / REMOVER
-    df = st.session_state.dados
+# =========================
+# CARDS NO TOPO
+# =========================
 
-    if not df.empty:
-        for i, row in df.iterrows():
+df = st.session_state.dados
 
-            col1, col2, col3 = st.columns([6,1,1])
+if not df.empty:
 
-            with col1:
-                st.write(
-                    f"**{row['Fornecedor']}** | "
-                    f"{row['Mês']} | "
-                    f"R$ {row['Valor']:,.2f} | "
-                    f"{row['Status']}"
+    st.subheader("Visão Rápida")
+
+    colunas = st.columns(4)
+
+    for idx, row in df.iterrows():
+
+        coluna = colunas[idx % 4]
+
+        if row["Status"] == "CONCLUÍDO":
+            cor = "#28a745"
+            texto_cor = "white"
+        else:
+            cor = "#ffc107"
+            texto_cor = "black"
+
+        coluna.markdown(
+            f"""
+            <div style="
+                background-color:{cor};
+                padding:18px;
+                border-radius:12px;
+                margin-bottom:15px;
+                font-weight:600;
+                color:{texto_cor};
+                font-size:14px;">
+                {row['Fornecedor']}<br><br>
+                Competência: {row['Mes_Competencia']}<br>
+                Vencimento: {row['Mes_Vencimento']}<br>
+                Referência: {row['Mes_Referencia']}<br>
+                Valor: R$ {row['Valor']:,.2f}
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+st.divider()
+
+# =========================
+# LISTA DETALHADA EMBAIXO
+# =========================
+
+st.subheader("Lista Completa")
+
+if not df.empty:
+
+    for i, row in df.iterrows():
+
+        col1, col2, col3 = st.columns([6,1,1])
+
+        with col1:
+            st.write(
+                f"**{row['Fornecedor']}** | "
+                f"Comp: {row['Mes_Competencia']} | "
+                f"Venc: {row['Mes_Vencimento']} | "
+                f"Ref: {row['Mes_Referencia']} | "
+                f"R$ {row['Valor']:,.2f} | "
+                f"{row['Status']}"
+            )
+
+        with col2:
+            if st.button("✏️", key=f"edit_{i}"):
+                st.session_state.editar_index = i
+                st.session_state.mostrar_form = True
+
+        with col3:
+            if st.button("🗑️", key=f"del_{i}"):
+                st.session_state.dados = (
+                    st.session_state.dados
+                    .drop(i)
+                    .reset_index(drop=True)
                 )
-
-            with col2:
-                if st.button("✏️", key=f"edit_{i}"):
-                    st.session_state.editar_index = i
-                    st.session_state.mostrar_form = True
-
-            with col3:
-                if st.button("🗑️", key=f"del_{i}"):
-                    st.session_state.dados = (
-                        st.session_state.dados
-                        .drop(i)
-                        .reset_index(drop=True)
-                    )
-                    st.rerun()
+                st.rerun()
+else:
+    st.info("Nenhum registro cadastrado ainda.")
