@@ -1,201 +1,94 @@
 import streamlit as st
 import pandas as pd
+import json
 import os
 
-st.set_page_config(page_title="Controle de Faturas", layout="wide")
-
-ARQUIVO = "dados_faturas.csv"
-
 # =========================
-# FORNECEDORES
+# CONFIGURAÇÃO DA PÁGINA
 # =========================
-FORNECEDORES_PADRAO = [
-    "E-SALES",
-    "PAES E DOCES JARDIM THELMA",
-    "PALLEFORT COMERCIO",
-    "BRASIL SERVIÇOS",
-    "EZ TOOLS",
-    "NISSEYS",
-    "FUSION",
-    "BUONNY",
-    "KM STAFF",
-    "PANIFICADORA MM",
-    "NUNES TRANSPORTES",
-    "THEODORO GÁS",
-    "BERKLEY"
-]
+st.set_page_config(page_title="Controle de Fornecedores", layout="wide")
+
+ARQUIVO_DADOS = "dados_fornecedores.json"
 
 # =========================
-# MESES
+# FUNÇÕES DE PERSISTÊNCIA
+# =========================
+def carregar_dados():
+    if os.path.exists(ARQUIVO_DADOS):
+        with open(ARQUIVO_DADOS, "r", encoding="utf-8") as f:
+            return pd.DataFrame(json.load(f))
+    else:
+        return pd.DataFrame(columns=["Nome", "Último Vencimento", "Valor", "Status"])
+
+def salvar_dados(df):
+    with open(ARQUIVO_DADOS, "w", encoding="utf-8") as f:
+        json.dump(df.to_dict(orient="records"), f, ensure_ascii=False, indent=4)
+
+# =========================
+# INICIALIZAÇÃO
+# =========================
+if "df" not in st.session_state:
+    st.session_state.df = carregar_dados()
+
+df = st.session_state.df
+
+# =========================
+# LISTA DE MESES FIXA
 # =========================
 MESES = [
-    "JAN", "FEV", "MAR", "ABR", "MAI", "JUN",
-    "JUL", "AGO", "SET", "OUT", "NOV", "DEZ"
+    "JAN/2026", "FEV/2026", "MAR/2026", "ABR/2026",
+    "MAI/2026", "JUN/2026", "JUL/2026", "AGO/2026",
+    "SET/2026", "OUT/2026", "NOV/2026", "DEZ/2026"
 ]
 
 # =========================
-# ESTRUTURA PADRÃO
+# INTERFACE
 # =========================
-COLUNAS_PADRAO = [
-    "Fornecedor",
-    "Ultimo_Vencimento",
-    "Status"
-]
+st.title("Controle Visual de Fornecedores")
 
-# =========================
-# FUNÇÃO PARA SALVAR
-# =========================
-def salvar_csv(df):
-    df.to_csv(ARQUIVO, index=False)
+col1, col2, col3, col4 = st.columns(4)
 
-# =========================
-# CARREGAR DADOS
-# =========================
-if "dados" not in st.session_state:
+with col1:
+    nome = st.text_input("Nome")
 
-    if os.path.exists(ARQUIVO):
-        st.session_state.dados = pd.read_csv(ARQUIVO)
-    else:
-        st.session_state.dados = pd.DataFrame(columns=COLUNAS_PADRAO)
+with col2:
+    ultimo_vencimento = st.selectbox("Último Vencimento", MESES)
 
-if "mostrar_form" not in st.session_state:
-    st.session_state.mostrar_form = False
+with col3:
+    valor = st.number_input("Valor", min_value=0.0, step=0.01, format="%.2f")
 
-if "editar_index" not in st.session_state:
-    st.session_state.editar_index = None
+with col4:
+    status = st.selectbox("Status", ["CONCLUÍDO", "EM ANDAMENTO"])
 
-# =========================
-# TÍTULO
-# =========================
-st.title("🧾 Controle de Faturas")
+if st.button("Adicionar"):
+    if nome.strip() != "":
+        novo = pd.DataFrame([{
+            "Nome": nome,
+            "Último Vencimento": ultimo_vencimento,
+            "Valor": valor,
+            "Status": status
+        }])
+
+        st.session_state.df = pd.concat([st.session_state.df, novo], ignore_index=True)
+        salvar_dados(st.session_state.df)
+        st.success("Fornecedor adicionado com sucesso!")
 
 # =========================
-# BOTÃO NOVO REGISTRO
+# VISUALIZAÇÃO COM REGRA DE COR
 # =========================
-if not st.session_state.mostrar_form:
-    if st.button("Novo Registro"):
-        st.session_state.mostrar_form = True
+st.markdown("---")
 
-# =========================
-# FORMULÁRIO
-# =========================
-if st.session_state.mostrar_form:
+def colorir_status(val):
+    if val == "CONCLUÍDO":
+        return "background-color: #d4edda; color: #155724; font-weight: bold;"
+    elif val == "EM ANDAMENTO":
+        return "background-color: #f8d7da; color: #721c24; font-weight: bold;"
+    return ""
 
-    with st.form("form_fatura", clear_on_submit=True):
-
-        fornecedor = st.selectbox("Fornecedor", FORNECEDORES_PADRAO)
-        vencimento = st.selectbox("Último Vencimento", MESES)
-        status = st.selectbox("Status", ["CONCLUÍDO", "EM ANDAMENTO"])
-
-        salvar = st.form_submit_button("Salvar")
-
-        if salvar:
-
-            novo = {
-                "Fornecedor": fornecedor,
-                "Ultimo_Vencimento": vencimento,
-                "Status": status
-            }
-
-            if st.session_state.editar_index is not None:
-                st.session_state.dados.loc[
-                    st.session_state.editar_index
-                ] = novo
-                st.session_state.editar_index = None
-
-            else:
-                filtro = (
-                    st.session_state.dados["Fornecedor"] == fornecedor
-                )
-
-                if filtro.any():
-                    st.session_state.dados.loc[filtro, :] = novo
-                else:
-                    st.session_state.dados = pd.concat(
-                        [st.session_state.dados, pd.DataFrame([novo])],
-                        ignore_index=True
-                    )
-
-            salvar_csv(st.session_state.dados)
-
-            st.session_state.mostrar_form = False
-            st.rerun()
-
-st.divider()
-
-# =========================
-# CARDS
-# =========================
-df = st.session_state.dados
-
-if not df.empty:
-
-    st.subheader("Visão Rápida")
-
-    colunas = st.columns(4)
-
-    for idx, row in df.iterrows():
-
-        coluna = colunas[idx % 4]
-
-        if row["Status"] == "CONCLUÍDO":
-            cor = "#28a745"
-            texto_cor = "white"
-        else:
-            cor = "#ffc107"
-            texto_cor = "black"
-
-        coluna.markdown(
-            f"""
-            <div style="
-                background-color:{cor};
-                padding:18px;
-                border-radius:12px;
-                margin-bottom:15px;
-                font-weight:600;
-                color:{texto_cor};
-                font-size:16px;">
-                {row['Fornecedor']}<br><br>
-                Último Vencimento: {row['Ultimo_Vencimento']}<br><br>
-                {row['Status']}
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
-
-st.divider()
-
-# =========================
-# LISTA
-# =========================
-st.subheader("Lista Completa")
-
-if not df.empty:
-
-    for i, row in df.iterrows():
-
-        col1, col2, col3 = st.columns([6,1,1])
-
-        with col1:
-            st.write(
-                f"**{row['Fornecedor']}** | "
-                f"Vencimento: {row['Ultimo_Vencimento']} | "
-                f"{row['Status']}"
-            )
-
-        with col2:
-            if st.button("✏️", key=f"edit_{i}"):
-                st.session_state.editar_index = i
-                st.session_state.mostrar_form = True
-
-        with col3:
-            if st.button("🗑️", key=f"del_{i}"):
-                st.session_state.dados = (
-                    st.session_state.dados
-                    .drop(i)
-                    .reset_index(drop=True)
-                )
-                salvar_csv(st.session_state.dados)
-                st.rerun()
+if not st.session_state.df.empty:
+    st.dataframe(
+        st.session_state.df.style.map(colorir_status, subset=["Status"]),
+        use_container_width=True
+    )
 else:
-    st.info("Nenhum registro cadastrado ainda.")
+    st.info("Nenhum fornecedor cadastrado ainda.")
