@@ -84,9 +84,6 @@ def salvar(df):
 if "df" not in st.session_state:
     st.session_state.df=carregar()
 
-if "etapa" not in st.session_state:
-    st.session_state.etapa=1
-
 if "edit_id" not in st.session_state:
     st.session_state.edit_id=None
 
@@ -122,48 +119,58 @@ if not df.empty:
 
 st.title("📊 Dashboard de Faturas")
 
-cfa, cfb, cfc = st.columns(3)
+# =============================
+# CARDS RESTAURADOS
+# =============================
 
-with cfa:
-    forn_sel=st.selectbox(
-        "Fornecedor",
-        ["Todos"]+sorted(df["fornecedor"].dropna().unique().tolist())
-        if not df.empty else ["Todos"]
-    )
+if not df.empty:
 
-with cfb:
-    status_sel=st.selectbox(
-        "Status",
-        ["Todos","Em andamento","Concluído"]
-    )
+    total_fat=df[df["status"]=="Concluído"]["valor"].sum()
+    total_nf=df[df["status"]!="Concluído"]["valor"].sum()
+    geral=df["valor"].sum()
 
-with cfc:
-    sla_sel=st.selectbox(
-        "SLA",
-        ["Todos","vencido","vence em breve","no prazo","concluido"]
-    )
+    c1,c2,c3=st.columns(3)
 
-df_view=df.copy()
+    c1.markdown(f"""
+    <div style="padding:20px;border-radius:14px;background:#1f8f4c;color:white">
+    <div style="font-size:16px">✅ Total faturado</div>
+    <div style="font-size:28px;font-weight:600">R$ {total_fat:,.2f}</div>
+    </div>
+    """,unsafe_allow_html=True)
 
-if forn_sel!="Todos":
-    df_view=df_view[df_view["fornecedor"]==forn_sel]
+    c2.markdown(f"""
+    <div style="padding:20px;border-radius:14px;background:#b00020;color:white">
+    <div style="font-size:16px">❌ Total não faturado</div>
+    <div style="font-size:28px;font-weight:600">R$ {total_nf:,.2f}</div>
+    </div>
+    """,unsafe_allow_html=True)
 
-if status_sel!="Todos":
-    df_view=df_view[df_view["status"]==status_sel]
+    c3.markdown(f"""
+    <div style="padding:20px;border-radius:14px;background:#2b2b2b;color:white">
+    <div style="font-size:16px">💰 Total geral</div>
+    <div style="font-size:28px;font-weight:600">R$ {geral:,.2f}</div>
+    </div>
+    """,unsafe_allow_html=True)
 
-if sla_sel!="Todos":
-    df_view=df_view[df_view["sla"]==sla_sel]
+    st.subheader("SLA de Pagamento")
 
-prioridade={"vencido":0,"vence em breve":1,"no prazo":2,"concluido":3}
-if not df_view.empty:
-    df_view["ord"]=df_view["sla"].map(prioridade)
-    df_view=df_view.sort_values(["ord","vencimento"])
+    venc=len(df[df["sla"]=="vencido"])
+    breve=len(df[df["sla"]=="vence em breve"])
+    prazo=len(df[df["sla"]=="no prazo"])
+    conc=len(df[df["sla"]=="concluido"])
+
+    s1,s2,s3,s4=st.columns(4)
+
+    s1.markdown(f"<div style='border-left:6px solid red;padding:15px;background:#f2f2f2;border-radius:10px'><b>VENCIDO</b><br><h3>{venc}</h3></div>",unsafe_allow_html=True)
+    s2.markdown(f"<div style='border-left:6px solid orange;padding:15px;background:#f2f2f2;border-radius:10px'><b>VENCE EM BREVE</b><br><h3>{breve}</h3></div>",unsafe_allow_html=True)
+    s3.markdown(f"<div style='border-left:6px solid blue;padding:15px;background:#f2f2f2;border-radius:10px'><b>NO PRAZO</b><br><h3>{prazo}</h3></div>",unsafe_allow_html=True)
+    s4.markdown(f"<div style='border-left:6px solid green;padding:15px;background:#f2f2f2;border-radius:10px'><b>CONCLUÍDO</b><br><h3>{conc}</h3></div>",unsafe_allow_html=True)
 
 # =============================
 # ALERTA DETALHADO
 # =============================
 
-vencidos = df_view[df_view["sla"]=="vencido"]
+vencidos = df[df["sla"]=="vencido"]
 
 if not vencidos.empty:
     soma = vencidos["valor"].sum()
@@ -180,145 +187,16 @@ if not vencidos.empty:
 """)
 
 # =============================
-# GRÁFICO PIZZA
+# GRÁFICO PIZZA MENOR
 # =============================
 
-if not df_view.empty:
-    graf=df_view.groupby("fornecedor")["valor"].sum().sort_values(ascending=False)
+if not df.empty:
+    graf=df.groupby("fornecedor")["valor"].sum().sort_values(ascending=False)
 
     st.subheader("📊 Distribuição de Valores por Fornecedor")
 
-    fig, ax = plt.subplots()
-    ax.pie(
-        graf,
-        labels=graf.index,
-        autopct='%1.1f%%',
-        startangle=90
-    )
+    fig, ax = plt.subplots(figsize=(4,4))  # reduzido
+    ax.pie(graf, labels=graf.index, autopct='%1.1f%%', startangle=90)
     ax.axis("equal")
 
     st.pyplot(fig)
-
-# =============================
-# REGISTROS VISUAIS
-# =============================
-
-st.divider()
-st.subheader("📁 Registros")
-
-if not df_view.empty:
-
-    status_cor = {
-        "Concluído": "#1f8f4c",
-        "Em andamento": "#fbc02d"
-    }
-
-    sla_cor = {
-        "vencido": "#e53935",
-        "vence em breve": "#fbc02d",
-        "no prazo": "#1e88e5",
-        "concluido": "#43a047"
-    }
-
-    for i,row in df_view.iterrows():
-
-        with st.expander(f"📄 {row['fornecedor']} — {row['vencimento'].date()}"):
-
-            st.markdown(f"""
-<div style="padding:15px;border-radius:12px;
-border-left:8px solid {status_cor.get(row['status'],'gray')};
-background:#f9f9f9">
-
-<b>Status:</b> <span style="color:{status_cor.get(row['status'],'black')};font-weight:600">
-{row['status']}
-</span><br>
-
-<b>SLA:</b> <span style="color:{sla_cor.get(row['sla'],'black')};font-weight:600">
-{row['sla']}
-</span><br><br>
-
-<b>Fatura:</b> {row['fatura']}<br>
-<b>Valor:</b> R$ {row['valor']:,.2f}<br>
-<b>CNPJ:</b> {row['cnpj']}<br>
-<b>Pedido de compras Heflo:</b> {row['codigo_servico']}<br>
-<b>Data Abertura:</b> {row['data_abertura']}<br>
-<b>Código Pedido:</b> {row['codigo_pedido']}<br>
-<b>Data Chamado:</b> {row['data_chamado']}
-</div>
-""", unsafe_allow_html=True)
-
-            if st.button("✏️ Editar",key=f"e{i}"):
-                st.session_state.edit_id=i
-                st.session_state.temp=row.to_dict()
-                st.session_state.etapa=1
-                st.session_state.mostrar_nova=True
-                st.rerun()
-
-            if st.button("🗑️ Excluir",key=f"d{i}"):
-                df.drop(i,inplace=True)
-                salvar(df)
-                st.rerun()
-
-# =============================
-# NOVA FATURA / EDIÇÃO
-# =============================
-
-st.divider()
-
-if st.button("Nova Fatura +"):
-    st.session_state.mostrar_nova=True
-    st.session_state.edit_id=None
-
-if st.session_state.mostrar_nova:
-
-    st.subheader("🧾 Cadastro / Edição de Fatura")
-
-    temp = st.session_state.get("temp", {})
-
-    status=st.selectbox("Status",["Em andamento","Concluído"],
-                        index=0 if temp.get("status","Em andamento")=="Em andamento" else 1)
-
-    forn=st.text_input("Fornecedor",value=temp.get("fornecedor",""))
-    fat=st.text_input("Fatura",value=temp.get("fatura",""))
-    venc=st.date_input("Vencimento",
-                       pd.to_datetime(temp.get("vencimento",date.today())))
-
-    val=st.number_input("Valor",value=float(temp.get("valor",0.0)))
-    cnpj=st.text_input("CNPJ",value=temp.get("cnpj",""))
-
-    cod=st.text_input("Pedido de compras Heflo",
-                      value=temp.get("codigo_servico",""))
-
-    dab=st.date_input("Data abertura",
-                      pd.to_datetime(temp.get("data_abertura",date.today())))
-
-    ped=st.text_input("Código Pedido",
-                      value=temp.get("codigo_pedido",""))
-
-    dch=st.date_input("Data chamado",
-                      pd.to_datetime(temp.get("data_chamado",date.today())))
-
-    if st.button("💾 Salvar"):
-        nova_linha={
-            "status":status,
-            "fornecedor":forn,
-            "fatura":fat,
-            "vencimento":str(venc),
-            "valor":val,
-            "cnpj":cnpj,
-            "codigo_servico":cod,
-            "data_abertura":str(dab),
-            "codigo_pedido":ped,
-            "data_chamado":str(dch)
-        }
-
-        if st.session_state.edit_id is not None:
-            df.loc[st.session_state.edit_id]=nova_linha
-        else:
-            df=pd.concat([df,pd.DataFrame([nova_linha])],ignore_index=True)
-
-        salvar(df)
-        st.session_state.df=df
-        st.session_state.mostrar_nova=False
-        st.success("Salvo com sucesso!")
-        st.rerun()
