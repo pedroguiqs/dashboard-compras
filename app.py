@@ -4,7 +4,7 @@ import sqlite3
 from datetime import datetime
 
 # ==========================
-# CONFIGURAÇÃO INICIAL
+# CONFIGURAÇÃO
 # ==========================
 
 st.set_page_config(
@@ -60,14 +60,6 @@ def carregar_faturas():
     return df
 
 
-def atualizar_status(id_fatura, pago):
-    conn = conectar()
-    cursor = conn.cursor()
-    cursor.execute("UPDATE faturas SET pago = ? WHERE id = ?", (pago, id_fatura))
-    conn.commit()
-    conn.close()
-
-
 # ==========================
 # LÓGICA DE STATUS
 # ==========================
@@ -98,9 +90,13 @@ def ultima_fatura_por_fornecedor(df):
 # ==========================
 
 criar_tabela()
+
+if "mostrar_form" not in st.session_state:
+    st.session_state.mostrar_form = True
+
 df = carregar_faturas()
 
-aba1, aba2 = st.tabs(["📊 Dashboard", "➕ Nova Fatura"])
+aba1, aba2 = st.tabs(["📊 Dashboard", "📑 Controle de Faturas"])
 
 # ==========================
 # DASHBOARD
@@ -114,7 +110,6 @@ with aba1:
         st.info("Nenhuma fatura cadastrada.")
     else:
         df_status = ultima_fatura_por_fornecedor(df)
-
         colunas = st.columns(3)
 
         for i, row in df_status.iterrows():
@@ -126,11 +121,13 @@ with aba1:
                     <div style="
                         padding:20px;
                         border-radius:12px;
-                        background-color:#1f2937;
+                        background-color: var(--background-color);
+                        border:1px solid #ccc;
                         border-left:8px solid {cor};
                         margin-bottom:20px;
+                        color: var(--text-color);
                     ">
-                        <h4>{row['fornecedor']}</h4>
+                        <h4 style="margin-bottom:10px;">{row['fornecedor']}</h4>
                         <p><b>Última competência:</b> {row['competencia'].strftime('%d/%m/%Y')}</p>
                         <p><b>Vencimento:</b> {row['vencimento'].strftime('%d/%m/%Y')}</p>
                         <p><b>Valor:</b> R$ {row['valor']:,.2f}</p>
@@ -141,45 +138,59 @@ with aba1:
                 )
 
 # ==========================
-# NOVA FATURA
+# CONTROLE DE FATURAS
 # ==========================
 
 with aba2:
 
-    st.title("➕ Lançamento Manual de Fatura")
+    st.title("📑 Controle de Faturas")
 
-    fornecedor = st.text_input("Fornecedor")
-
-    competencia = st.date_input(
-        "Competência",
-        format="DD/MM/YYYY"
-    )
-
-    vencimento = st.date_input(
-        "Data de Vencimento",
-        format="DD/MM/YYYY"
-    )
-
-    valor = st.number_input(
-        "Valor",
-        min_value=0.0,
-        format="%.2f"
-    )
-
-    pago = st.checkbox("Já está pago?")
-
-    if st.button("Salvar Fatura"):
-
-        if fornecedor == "":
-            st.warning("Informe o nome do fornecedor.")
-        else:
-            inserir_fatura(
-                fornecedor=fornecedor,
-                competencia=competencia.strftime("%Y-%m-%d"),
-                vencimento=vencimento.strftime("%Y-%m-%d"),
-                valor=valor,
-                pago=1 if pago else 0
-            )
-
-            st.success("Fatura cadastrada com sucesso.")
+    if not st.session_state.mostrar_form:
+        if st.button("➕ Novo Registro"):
+            st.session_state.mostrar_form = True
             st.rerun()
+
+    if st.session_state.mostrar_form:
+
+        fornecedor = st.text_input("Fornecedor", key="fornecedor")
+        competencia = st.date_input(
+            "Competência",
+            format="DD/MM/YYYY",
+            key="competencia"
+        )
+        vencimento = st.date_input(
+            "Data de Vencimento",
+            format="DD/MM/YYYY",
+            key="vencimento"
+        )
+        valor = st.number_input(
+            "Valor",
+            min_value=0.0,
+            format="%.2f",
+            key="valor"
+        )
+        pago = st.checkbox("Já está pago?", key="pago")
+
+        if st.button("Salvar"):
+
+            if fornecedor == "":
+                st.warning("Informe o nome do fornecedor.")
+            else:
+                inserir_fatura(
+                    fornecedor=fornecedor,
+                    competencia=competencia.strftime("%Y-%m-%d"),
+                    vencimento=vencimento.strftime("%Y-%m-%d"),
+                    valor=valor,
+                    pago=1 if pago else 0
+                )
+
+                st.success("Fatura cadastrada com sucesso.")
+
+                # Limpa campos
+                st.session_state.fornecedor = ""
+                st.session_state.valor = 0.0
+                st.session_state.pago = False
+
+                # Esconde formulário
+                st.session_state.mostrar_form = False
+                st.rerun()
