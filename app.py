@@ -45,16 +45,6 @@ def inserir_fatura(fornecedor, competencia, vencimento, valor, pago):
     conn.close()
 
 
-def carregar_faturas():
-    conn = conectar()
-    df = pd.read_sql("SELECT * FROM faturas", conn)
-    conn.close()
-    if not df.empty:
-        df["competencia"] = pd.to_datetime(df["competencia"])
-        df["vencimento"] = pd.to_datetime(df["vencimento"])
-    return df
-
-
 def atualizar_fatura(id_fatura, fornecedor, competencia, vencimento, valor, pago):
     conn = conectar()
     cursor = conn.cursor()
@@ -74,14 +64,61 @@ def deletar_fatura(id_fatura):
     conn.commit()
     conn.close()
 
+
+def carregar_faturas():
+    conn = conectar()
+    df = pd.read_sql("SELECT * FROM faturas", conn)
+    conn.close()
+    if not df.empty:
+        df["competencia"] = pd.to_datetime(df["competencia"])
+        df["vencimento"] = pd.to_datetime(df["vencimento"])
+    return df
+
+# ==========================
+# INSERÇÃO INICIAL
+# ==========================
+
+def inserir_dados_iniciais():
+    dados = [
+        ("BERKLEY", "22/01/2026", "15/02/2026", "1.073,80"),
+        ("THEODORO GÁS", "29/01/2026", "13/02/2026", "391,00"),
+        ("FUSION", "03/02/2026", "23/02/2026", "1.249,96"),
+        ("BRASIL SERVIÇOS", "04/02/2026", "25/02/2026", "20.603,00"),
+        ("NISSEYS", "04/02/2026", "24/02/2026", "8.042,98"),
+        ("BUONNY", "03/02/2026", "24/02/2026", "74,99"),
+        ("E-SALES", "03/02/2026", "25/02/2026", "5.603,52"),
+        ("BUONNY", "03/02/2026", "24/02/2026", "135,99"),
+    ]
+
+    conn = conectar()
+    cursor = conn.cursor()
+
+    for fornecedor, comp, venc, valor in dados:
+
+        valor_convertido = float(valor.replace(".", "").replace(",", "."))
+
+        cursor.execute("""
+            INSERT INTO faturas (fornecedor, competencia, vencimento, valor, pago)
+            VALUES (?, ?, ?, ?, ?)
+        """, (
+            fornecedor,
+            pd.to_datetime(comp, dayfirst=True).strftime("%Y-%m-%d"),
+            pd.to_datetime(venc, dayfirst=True).strftime("%Y-%m-%d"),
+            valor_convertido,
+            0  # EM ANDAMENTO
+        ))
+
+    conn.commit()
+    conn.close()
+
 # ==========================
 # STATUS
 # ==========================
 
 def classificar_status(row):
     if row["pago"] == 1:
-        return "PAGO", "#2ecc71"  # Verde
-    return "EM ANDAMENTO", "#f1c40f"  # Amarelo
+        return "PAGO", "#2ecc71"
+    return "EM ANDAMENTO", "#f1c40f"
 
 
 def ultima_fatura_por_fornecedor(df):
@@ -97,6 +134,10 @@ def ultima_fatura_por_fornecedor(df):
 # ==========================
 
 criar_tabela()
+
+if carregar_faturas().empty:
+    inserir_dados_iniciais()
+
 df = carregar_faturas()
 
 aba1, aba2 = st.tabs(["📊 Dashboard", "📑 Controle de Faturas"])
@@ -127,8 +168,8 @@ with aba1:
                         border:1px solid #ccc;
                         border-left:8px solid {cor};
                         margin-bottom:20px;
-                        background-color: white;
-                        color: black;
+                        background-color:white;
+                        color:black;
                     ">
                         <h4>{row['fornecedor']}</h4>
                         <p><b>Última competência:</b> {row['competencia'].strftime('%d/%m/%Y')}</p>
@@ -147,8 +188,6 @@ with aba1:
 with aba2:
 
     st.title("📑 Controle de Faturas")
-
-    # ---- Cadastro ----
 
     with st.form("form_fatura", clear_on_submit=True):
 
@@ -172,8 +211,6 @@ with aba2:
             st.rerun()
 
     st.divider()
-
-    # ---- Tabela com edição e remoção ----
 
     if not df.empty:
 
