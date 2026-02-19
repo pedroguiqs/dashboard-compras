@@ -1,10 +1,13 @@
 import streamlit as st
 import pandas as pd
+import os
 
 st.set_page_config(page_title="Controle de Faturas", layout="wide")
 
+ARQUIVO = "dados_faturas.csv"
+
 # =========================
-# FORNECEDORES PADRÃO
+# FORNECEDORES
 # =========================
 FORNECEDORES_PADRAO = [
     "E-SALES",
@@ -23,15 +26,15 @@ FORNECEDORES_PADRAO = [
 ]
 
 # =========================
-# LISTA DE MESES
+# MESES
 # =========================
 MESES = [
-    "JANEIRO/2026", "FEVEREIRO/2026", "MARÇO/2026", "ABRIL/2026", "MAIO/2026", "JUNHO/2026",
-    "JULHO/2026", "AGOSTO/2026", "SETEMBRO/2026", "OUTUBRO/2026", "NOVEMBRO/2026", "DEZEMBRO/2026"
+    "JAN", "FEV", "MAR", "ABR", "MAI", "JUN",
+    "JUL", "AGO", "SET", "OUT", "NOV", "DEZ"
 ]
 
 # =========================
-# ESTRUTURA DO DATAFRAME
+# ESTRUTURA PADRÃO
 # =========================
 COLUNAS_PADRAO = [
     "Fornecedor",
@@ -39,10 +42,20 @@ COLUNAS_PADRAO = [
     "Status"
 ]
 
+# =========================
+# FUNÇÃO PARA SALVAR
+# =========================
+def salvar_csv(df):
+    df.to_csv(ARQUIVO, index=False)
+
+# =========================
+# CARREGAR DADOS
+# =========================
 if "dados" not in st.session_state:
-    st.session_state.dados = pd.DataFrame(columns=COLUNAS_PADRAO)
-else:
-    if list(st.session_state.dados.columns) != COLUNAS_PADRAO:
+
+    if os.path.exists(ARQUIVO):
+        st.session_state.dados = pd.read_csv(ARQUIVO)
+    else:
         st.session_state.dados = pd.DataFrame(columns=COLUNAS_PADRAO)
 
 if "mostrar_form" not in st.session_state:
@@ -84,7 +97,6 @@ if st.session_state.mostrar_form:
                 "Status": status
             }
 
-            # Se estiver editando
             if st.session_state.editar_index is not None:
                 st.session_state.dados.loc[
                     st.session_state.editar_index
@@ -92,7 +104,6 @@ if st.session_state.mostrar_form:
                 st.session_state.editar_index = None
 
             else:
-                # Atualiza se fornecedor já existir
                 filtro = (
                     st.session_state.dados["Fornecedor"] == fornecedor
                 )
@@ -105,13 +116,15 @@ if st.session_state.mostrar_form:
                         ignore_index=True
                     )
 
+            salvar_csv(st.session_state.dados)
+
             st.session_state.mostrar_form = False
             st.rerun()
 
 st.divider()
 
 # =========================
-# CARDS NO TOPO
+# CARDS
 # =========================
 df = st.session_state.dados
 
@@ -153,7 +166,7 @@ if not df.empty:
 st.divider()
 
 # =========================
-# LISTA ABAIXO
+# LISTA
 # =========================
 st.subheader("Lista Completa")
 
@@ -182,6 +195,7 @@ if not df.empty:
                     .drop(i)
                     .reset_index(drop=True)
                 )
+                salvar_csv(st.session_state.dados)
                 st.rerun()
 else:
     st.info("Nenhum registro cadastrado ainda.")
