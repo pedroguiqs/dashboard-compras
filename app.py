@@ -1,6 +1,5 @@
 import streamlit as st
 import pandas as pd
-from datetime import datetime
 
 st.set_page_config(page_title="Controle de Faturas", layout="wide")
 
@@ -38,51 +37,44 @@ if "editar_index" not in st.session_state:
     st.session_state.editar_index = None
 
 # =========================
-# SIDEBAR
+# ABAS NO TOPO
 # =========================
-menu = st.sidebar.radio("Menu", ["Dashboard", "Controle de Faturas"])
+aba_dashboard, aba_controle = st.tabs(["Dashboard", "Controle de Faturas"])
 
 # =========================
 # DASHBOARD
 # =========================
-if menu == "Dashboard":
+with aba_dashboard:
 
-    st.title("📊 Dashboard Financeiro")
+    st.title("📊 Dashboard de Faturas")
 
     df = st.session_state.dados
 
-    col1, col2 = st.columns(2)
-
-    total_pago = df[df["Status"] == "PAGO"]["Valor"].sum()
-    total_andamento = df[df["Status"] == "EM ANDAMENTO"]["Valor"].sum()
-
-    with col1:
-        st.metric("Total Pago", f"R$ {total_pago:,.2f}")
-
-    with col2:
-        st.metric("Em Andamento", f"R$ {total_andamento:,.2f}")
-
-    st.divider()
-
-    if not df.empty:
+    if df.empty:
+        st.info("Nenhuma fatura cadastrada ainda.")
+    else:
         for i, row in df.iterrows():
 
-            if row["Status"] == "PAGO":
+            if row["Status"] == "CONCLUÍDO":
                 cor = "#28a745"  # Verde
+                texto_cor = "white"
             else:
                 cor = "#ffc107"  # Amarelo
+                texto_cor = "black"
 
             st.markdown(
                 f"""
                 <div style="
                     background-color:{cor};
-                    padding:15px;
-                    border-radius:10px;
-                    margin-bottom:10px;
-                    color:black;
-                    font-weight:600;">
-                    {row['Fornecedor']} | {row['Mês']} <br>
-                    R$ {row['Valor']:,.2f} - {row['Status']}
+                    padding:20px;
+                    border-radius:12px;
+                    margin-bottom:12px;
+                    font-weight:600;
+                    color:{texto_cor};
+                    font-size:16px;">
+                    {row['Fornecedor']}<br>
+                    {row['Mês']} | R$ {row['Valor']:,.2f}<br>
+                    {row['Status']}
                 </div>
                 """,
                 unsafe_allow_html=True
@@ -91,7 +83,7 @@ if menu == "Dashboard":
 # =========================
 # CONTROLE DE FATURAS
 # =========================
-if menu == "Controle de Faturas":
+with aba_controle:
 
     st.title("🧾 Controle de Faturas")
 
@@ -100,7 +92,7 @@ if menu == "Controle de Faturas":
         if st.button("Novo Registro"):
             st.session_state.mostrar_form = True
 
-    # Formulário
+    # FORMULÁRIO
     if st.session_state.mostrar_form:
 
         with st.form("form_fatura", clear_on_submit=True):
@@ -108,7 +100,7 @@ if menu == "Controle de Faturas":
             fornecedor = st.selectbox("Fornecedor", FORNECEDORES_PADRAO)
             mes = st.text_input("Mês (ex: JAN/2026)")
             valor = st.number_input("Valor", min_value=0.0, format="%.2f")
-            status = st.selectbox("Status", ["PAGO", "EM ANDAMENTO"])
+            status = st.selectbox("Status", ["CONCLUÍDO", "EM ANDAMENTO"])
 
             salvar = st.form_submit_button("Salvar")
 
@@ -128,7 +120,7 @@ if menu == "Controle de Faturas":
                     ] = novo_registro
                     st.session_state.editar_index = None
                 else:
-                    # Permite duplicar fornecedor no mesmo mês
+                    # Permite duplicidade no mesmo mês (ex: BUONNY)
                     st.session_state.dados = pd.concat(
                         [st.session_state.dados, pd.DataFrame([novo_registro])],
                         ignore_index=True
@@ -139,18 +131,21 @@ if menu == "Controle de Faturas":
 
     st.divider()
 
-    # =========================
     # LISTAGEM COM EDITAR / REMOVER
-    # =========================
     df = st.session_state.dados
 
     if not df.empty:
         for i, row in df.iterrows():
 
-            col1, col2, col3 = st.columns([5,1,1])
+            col1, col2, col3 = st.columns([6,1,1])
 
             with col1:
-                st.write(f"**{row['Fornecedor']}** - {row['Mês']} - R$ {row['Valor']:,.2f} - {row['Status']}")
+                st.write(
+                    f"**{row['Fornecedor']}** | "
+                    f"{row['Mês']} | "
+                    f"R$ {row['Valor']:,.2f} | "
+                    f"{row['Status']}"
+                )
 
             with col2:
                 if st.button("✏️", key=f"edit_{i}"):
@@ -159,5 +154,9 @@ if menu == "Controle de Faturas":
 
             with col3:
                 if st.button("🗑️", key=f"del_{i}"):
-                    st.session_state.dados = st.session_state.dados.drop(i).reset_index(drop=True)
+                    st.session_state.dados = (
+                        st.session_state.dados
+                        .drop(i)
+                        .reset_index(drop=True)
+                    )
                     st.rerun()
