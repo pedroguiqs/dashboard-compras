@@ -35,6 +35,22 @@ df = st.session_state.df
 # =========================
 # LISTA DE MESES FIXA
 # =========================
+FORNECEDORES_PADRAO = [
+    "E-SALES",
+    "PAES E DOCES JARDIM THELMA",
+    "PALLEFORT COMERCIO",
+    "BRASIL SERVIÇOS",
+    "EZ TOOLS",
+    "NISSEYS",
+    "FUSION",
+    "BUONNY",
+    "KM STAFF",
+    "PANIFICADORA MM",
+    "NUNES TRANSPORTES",
+    "THEODORO GÁS",
+    "BERKLEY"
+]
+
 MESES = [
     "JAN/2026", "FEV/2026", "MAR/2026", "ABR/2026",
     "MAI/2026", "JUN/2026", "JUL/2026", "AGO/2026",
@@ -92,3 +108,4 @@ if not st.session_state.df.empty:
     )
 else:
     st.info("Nenhum fornecedor cadastrado ainda.")
+
