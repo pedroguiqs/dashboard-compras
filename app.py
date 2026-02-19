@@ -1,186 +1,185 @@
 import streamlit as st
 import pandas as pd
-from datetime import date
-import json
-import os
+import sqlite3
+from datetime import datetime
+
+# ==========================
+# CONFIGURAÇÃO INICIAL
+# ==========================
 
 st.set_page_config(
-    page_title="Compras",
-    page_icon="💲",
+    page_title="Gestão de Fornecedores",
     layout="wide"
 )
 
-# =============================
-# LOGIN
-# =============================
+DB_NAME = "fornecedores.db"
 
-USUARIOS = {
-    "admin": "1234",
-    "pedro": "compras2026"
-}
+# ==========================
+# BANCO DE DADOS
+# ==========================
 
-if "logado" not in st.session_state:
-    st.session_state.logado = False
+def conectar():
+    return sqlite3.connect(DB_NAME, check_same_thread=False)
 
-def tela_login():
-    st.title("🔐 Login")
-    user = st.text_input("Usuário")
-    senha = st.text_input("Senha", type="password")
 
-    if st.button("Entrar"):
-        if user in USUARIOS and USUARIOS[user] == senha:
-            st.session_state.logado = True
-            st.success("Login realizado!")
-            st.rerun()
-        else:
-            st.error("Usuário ou senha inválidos")
+def criar_tabela():
+    conn = conectar()
+    cursor = conn.cursor()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS faturas (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            fornecedor TEXT NOT NULL,
+            competencia DATE NOT NULL,
+            vencimento DATE NOT NULL,
+            valor REAL NOT NULL,
+            pago INTEGER NOT NULL
+        )
+    """)
+    conn.commit()
+    conn.close()
 
-if not st.session_state.logado:
-    tela_login()
-    st.stop()
 
-if st.sidebar.button("🚪 Logout"):
-    st.session_state.logado = False
-    st.rerun()
+def inserir_fatura(fornecedor, competencia, vencimento, valor, pago):
+    conn = conectar()
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT INTO faturas (fornecedor, competencia, vencimento, valor, pago)
+        VALUES (?, ?, ?, ?, ?)
+    """, (fornecedor, competencia, vencimento, valor, pago))
+    conn.commit()
+    conn.close()
 
-# =============================
-# SIDEBAR
-# =============================
 
-pagina = st.sidebar.radio(
-    "📁 Menu",
-    ["Gestão de Faturas","Gestão de Insumos"]
-)
+def carregar_faturas():
+    conn = conectar()
+    df = pd.read_sql("SELECT * FROM faturas", conn)
+    conn.close()
+    if not df.empty:
+        df["competencia"] = pd.to_datetime(df["competencia"])
+        df["vencimento"] = pd.to_datetime(df["vencimento"])
+    return df
 
-if pagina == "Gestão de Insumos":
-    st.title("🛠️ Gestão de Insumos")
-    st.info("Módulo em criação / manutenção.")
-    st.stop()
 
-# =============================
-# BASE
-# =============================
+def atualizar_status(id_fatura, pago):
+    conn = conectar()
+    cursor = conn.cursor()
+    cursor.execute("UPDATE faturas SET pago = ? WHERE id = ?", (pago, id_fatura))
+    conn.commit()
+    conn.close()
 
-ARQ="dados_faturas.json"
 
-COLUNAS=[
-"status","fornecedor","fatura","vencimento","valor","cnpj",
-"codigo_servico","data_abertura","codigo_pedido","data_chamado"
-]
+# ==========================
+# LÓGICA DE STATUS
+# ==========================
 
-def carregar():
-    if os.path.exists(ARQ):
-        with open(ARQ,"r") as f:
-            dados=json.load(f)
-            return pd.DataFrame(dados,columns=COLUNAS)
-    return pd.DataFrame(columns=COLUNAS)
+def classificar_status(row):
+    hoje = pd.Timestamp.today().normalize()
 
-def salvar(df):
-    with open(ARQ,"w") as f:
-        json.dump(df.to_dict(orient="records"),f,default=str)
+    if row["pago"] == 1:
+        return "PAGO", "#2ecc71"
 
-if "df" not in st.session_state:
-    st.session_state.df=carregar()
+    if row["vencimento"] < hoje:
+        return "ATRASADO", "#e74c3c"
 
-if "edit_id" not in st.session_state:
-    st.session_state.edit_id=None
+    return "PENDENTE", "#f39c12"
 
-if "mostrar_nova" not in st.session_state:
-    st.session_state.mostrar_nova=False
 
-df=st.session_state.df
+def ultima_fatura_por_fornecedor(df):
+    return (
+        df.sort_values("competencia")
+        .groupby("fornecedor")
+        .tail(1)
+        .reset_index(drop=True)
+    )
 
-# =============================
-# SLA
-# =============================
 
-hoje=pd.Timestamp.today()
+# ==========================
+# INICIALIZAÇÃO
+# ==========================
 
-def sla(row):
-    if row["status"]=="Concluído":
-        return "concluido"
-    if not row["vencimento"]:
-        return "no prazo"
-    dias=(pd.to_datetime(row["vencimento"])-hoje).days
-    if dias<0: return "vencido"
-    if dias<=10: return "vence em breve"
-    return "no prazo"
+criar_tabela()
+df = carregar_faturas()
 
-if not df.empty:
-    df["sla"]=df.apply(sla,axis=1)
-    df["vencimento"]=pd.to_datetime(df["vencimento"],errors="coerce")
-    df["valor"]=pd.to_numeric(df["valor"],errors="coerce")
+aba1, aba2 = st.tabs(["📊 Dashboard", "➕ Nova Fatura"])
 
-# =============================
+# ==========================
 # DASHBOARD
-# =============================
-
-st.title("📊 Dashboard de Faturas")
-
-if not df.empty:
-
-    total_fat=df[df["status"]=="Concluído"]["valor"].sum()
-    total_nf=df[df["status"]!="Concluído"]["valor"].sum()
-    geral=df["valor"].sum()
-
-    c1,c2,c3=st.columns(3)
-
-    c1.metric("✅ Total faturado",f"R$ {total_fat:,.2f}")
-    c2.metric("❌ Total não faturado",f"R$ {total_nf:,.2f}")
-    c3.metric("💰 Total geral",f"R$ {geral:,.2f}")
-
-    st.subheader("SLA de Pagamento")
-
-    venc=len(df[df["sla"]=="vencido"])
-    breve=len(df[df["sla"]=="vence em breve"])
-    prazo=len(df[df["sla"]=="no prazo"])
-    conc=len(df[df["sla"]=="concluido"])
-
-    s1,s2,s3,s4=st.columns(4)
-
-    s1.metric("🔴 Vencido",venc)
-    s2.metric("🟠 Vence em breve",breve)
-    s3.metric("🔵 No prazo",prazo)
-    s4.metric("🟢 Concluído",conc)
-
-# =============================
-# ALERTA DETALHADO
-# =============================
-
-vencidos = df[df["sla"]=="vencido"]
-
-if not vencidos.empty:
-    soma = vencidos["valor"].sum()
-
-    nomes = "\n".join([
-        f"- {r['fornecedor']} | Fatura: {r['fatura']} | Venc: {pd.to_datetime(r['vencimento']).date()} | R$ {r['valor']:,.2f}"
-        for _, r in vencidos.iterrows()
-    ])
-
-    st.error(f"""
-⚠️ {len(vencidos)} faturas vencidas — Total R$ {soma:,.2f}
-
-{nomes}
-""")
-
-# ====================================================
-# 3 ABAS RESTAURADAS (PARTE PRINCIPAL DO SISTEMA)
-# ====================================================
-
-aba1, aba2, aba3 = st.tabs([
-    "📄 Registro da Fatura",
-    "🛒 Pedido de Compra",
-    "📞 Chamado V360"
-])
+# ==========================
 
 with aba1:
-    st.subheader("Registro da Fatura")
-    st.info("Aqui entra o formulário principal da fatura (como já estava no seu sistema).")
+
+    st.title("📊 Status Geral dos Fornecedores")
+
+    if df.empty:
+        st.info("Nenhuma fatura cadastrada.")
+    else:
+        df_status = ultima_fatura_por_fornecedor(df)
+
+        colunas = st.columns(3)
+
+        for i, row in df_status.iterrows():
+            status, cor = classificar_status(row)
+
+            with colunas[i % 3]:
+                st.markdown(
+                    f"""
+                    <div style="
+                        padding:20px;
+                        border-radius:12px;
+                        background-color:#1f2937;
+                        border-left:8px solid {cor};
+                        margin-bottom:20px;
+                    ">
+                        <h4>{row['fornecedor']}</h4>
+                        <p><b>Última competência:</b> {row['competencia'].strftime('%d/%m/%Y')}</p>
+                        <p><b>Vencimento:</b> {row['vencimento'].strftime('%d/%m/%Y')}</p>
+                        <p><b>Valor:</b> R$ {row['valor']:,.2f}</p>
+                        <p><b>Status:</b> {status}</p>
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
+
+# ==========================
+# NOVA FATURA
+# ==========================
 
 with aba2:
-    st.subheader("Pedido de Compra")
-    st.info("Campos e lógica de Pedido Financeiro / Pedido de Compra.")
 
-with aba3:
-    st.subheader("Chamado V360")
-    st.info("Campos e lógica referente ao chamado V360.")
+    st.title("➕ Lançamento Manual de Fatura")
+
+    fornecedor = st.text_input("Fornecedor")
+
+    competencia = st.date_input(
+        "Competência",
+        format="DD/MM/YYYY"
+    )
+
+    vencimento = st.date_input(
+        "Data de Vencimento",
+        format="DD/MM/YYYY"
+    )
+
+    valor = st.number_input(
+        "Valor",
+        min_value=0.0,
+        format="%.2f"
+    )
+
+    pago = st.checkbox("Já está pago?")
+
+    if st.button("Salvar Fatura"):
+
+        if fornecedor == "":
+            st.warning("Informe o nome do fornecedor.")
+        else:
+            inserir_fatura(
+                fornecedor=fornecedor,
+                competencia=competencia.strftime("%Y-%m-%d"),
+                vencimento=vencimento.strftime("%Y-%m-%d"),
+                valor=valor,
+                pago=1 if pago else 0
+            )
+
+            st.success("Fatura cadastrada com sucesso.")
+            st.rerun()
