@@ -1,22 +1,30 @@
 import streamlit as st
 import pandas as pd
-from datetime import datetime
+from datetime import date
 import json
 import os
+from io import BytesIO
 import matplotlib.pyplot as plt
 
-st.set_page_config(page_title="Compras", page_icon="💲", layout="wide")
+st.set_page_config(
+    page_title="Compras",
+    page_icon="💲",
+    layout="wide"
+)
 
-# ==============================
+# =============================
 # LOGIN
-# ==============================
+# =============================
 
-USUARIOS = {"admin": "1234"}
+USUARIOS = {
+    "admin": "1234",
+    "pedro": "compras2026"
+}
 
 if "logado" not in st.session_state:
     st.session_state.logado = False
 
-def login():
+def tela_login():
     st.title("🔐 Login")
     user = st.text_input("Usuário")
     senha = st.text_input("Senha", type="password")
@@ -24,21 +32,40 @@ def login():
     if st.button("Entrar"):
         if user in USUARIOS and USUARIOS[user] == senha:
             st.session_state.logado = True
+            st.success("Login realizado!")
             st.rerun()
         else:
             st.error("Usuário ou senha inválidos")
 
 if not st.session_state.logado:
-    login()
+    tela_login()
     st.stop()
 
-# ==============================
+if st.sidebar.button("🚪 Logout"):
+    st.session_state.logado = False
+    st.rerun()
+
+# =============================
+# SIDEBAR
+# =============================
+
+pagina = st.sidebar.radio(
+    "📁 Menu",
+    ["Gestão de Faturas","Gestão de Insumos"]
+)
+
+if pagina == "Gestão de Insumos":
+    st.title("🛠️ Gestão de Insumos")
+    st.info("Módulo em criação / manutenção.")
+    st.stop()
+
+# =============================
 # BASE
-# ==============================
+# =============================
 
-ARQ = "dados_faturas.json"
+ARQ="dados_faturas.json"
 
-COLUNAS = [
+COLUNAS=[
 "status","fornecedor","fatura","vencimento","valor","cnpj",
 "codigo_servico","data_abertura","codigo_pedido","data_chamado"
 ]
@@ -46,7 +73,8 @@ COLUNAS = [
 def carregar():
     if os.path.exists(ARQ):
         with open(ARQ,"r") as f:
-            return pd.DataFrame(json.load(f))
+            dados=json.load(f)
+            return pd.DataFrame(dados,columns=COLUNAS)
     return pd.DataFrame(columns=COLUNAS)
 
 def salvar(df):
@@ -54,135 +82,243 @@ def salvar(df):
         json.dump(df.to_dict(orient="records"),f,default=str)
 
 if "df" not in st.session_state:
-    st.session_state.df = carregar()
+    st.session_state.df=carregar()
 
-df = st.session_state.df
+if "etapa" not in st.session_state:
+    st.session_state.etapa=1
 
-# ==============================
+if "edit_id" not in st.session_state:
+    st.session_state.edit_id=None
+
+if "mostrar_nova" not in st.session_state:
+    st.session_state.mostrar_nova=False
+
+df=st.session_state.df
+
+# =============================
 # SLA
-# ==============================
+# =============================
 
-hoje = pd.Timestamp.today()
+hoje=pd.Timestamp.today()
 
-def calcular_sla(row):
-    if row["status"] == "Concluído":
+def sla(row):
+    if row["status"]=="Concluído":
         return "concluido"
-    dias = (pd.to_datetime(row["vencimento"]) - hoje).days
-    if dias < 0: return "vencido"
-    if dias <= 10: return "vence em breve"
+    if not row["vencimento"]:
+        return "no prazo"
+    dias=(pd.to_datetime(row["vencimento"])-hoje).days
+    if dias<0: return "vencido"
+    if dias<=10: return "vence em breve"
     return "no prazo"
 
 if not df.empty:
-    df["vencimento"] = pd.to_datetime(df["vencimento"], errors="coerce")
-    df["valor"] = pd.to_numeric(df["valor"], errors="coerce")
-    df["sla"] = df.apply(calcular_sla, axis=1)
+    df["sla"]=df.apply(sla,axis=1)
+    df["vencimento"]=pd.to_datetime(df["vencimento"],errors="coerce")
+    df["valor"]=pd.to_numeric(df["valor"],errors="coerce")
 
-# ==============================
+# =============================
 # DASHBOARD
-# ==============================
+# =============================
 
 st.title("📊 Dashboard de Faturas")
 
-if not df.empty:
+cfa, cfb, cfc = st.columns(3)
 
-    total_faturado = df[df["status"]=="Concluído"]["valor"].sum()
-    total_nao_faturado = df[df["status"]!="Concluído"]["valor"].sum()
-    total_geral = df["valor"].sum()
+with cfa:
+    forn_sel=st.selectbox(
+        "Fornecedor",
+        ["Todos"]+sorted(df["fornecedor"].dropna().unique().tolist())
+        if not df.empty else ["Todos"]
+    )
 
-    # ===== CARDS SUPERIORES =====
-    col1, col2, col3 = st.columns(3)
+with cfb:
+    status_sel=st.selectbox(
+        "Status",
+        ["Todos","Em andamento","Concluído"]
+    )
 
-    col1.markdown(f"""
-    <div style="background:#118d57;padding:25px;border-radius:15px;color:white">
-    <h4>✔ Total faturado</h4>
-    <h2>R$ {total_faturado:,.2f}</h2>
-    </div>
-    """, unsafe_allow_html=True)
+with cfc:
+    sla_sel=st.selectbox(
+        "SLA",
+        ["Todos","vencido","vence em breve","no prazo","concluido"]
+    )
 
-    col2.markdown(f"""
-    <div style="background:#c0001a;padding:25px;border-radius:15px;color:white">
-    <h4>✖ Total não faturado</h4>
-    <h2>R$ {total_nao_faturado:,.2f}</h2>
-    </div>
-    """, unsafe_allow_html=True)
+df_view=df.copy()
 
-    col3.markdown(f"""
-    <div style="background:#1f1f1f;padding:25px;border-radius:15px;color:white">
-    <h4>💰 Total geral</h4>
-    <h2>R$ {total_geral:,.2f}</h2>
-    </div>
-    """, unsafe_allow_html=True)
+if forn_sel!="Todos":
+    df_view=df_view[df_view["fornecedor"]==forn_sel]
 
-    st.subheader("SLA de Pagamento")
+if status_sel!="Todos":
+    df_view=df_view[df_view["status"]==status_sel]
 
-    vencido = len(df[df["sla"]=="vencido"])
-    breve = len(df[df["sla"]=="vence em breve"])
-    prazo = len(df[df["sla"]=="no prazo"])
-    concluido = len(df[df["sla"]=="concluido"])
+if sla_sel!="Todos":
+    df_view=df_view[df_view["sla"]==sla_sel]
 
-    c1,c2,c3,c4 = st.columns(4)
+prioridade={"vencido":0,"vence em breve":1,"no prazo":2,"concluido":3}
+if not df_view.empty:
+    df_view["ord"]=df_view["sla"].map(prioridade)
+    df_view=df_view.sort_values(["ord","vencimento"])
 
-    c1.markdown(f"<div style='border-left:6px solid red;padding:15px;background:#f2f2f2;border-radius:10px'><b>VENCIDO</b><br><h3>{vencido}</h3></div>", unsafe_allow_html=True)
-    c2.markdown(f"<div style='border-left:6px solid orange;padding:15px;background:#f2f2f2;border-radius:10px'><b>VENCE EM BREVE</b><br><h3>{breve}</h3></div>", unsafe_allow_html=True)
-    c3.markdown(f"<div style='border-left:6px solid blue;padding:15px;background:#f2f2f2;border-radius:10px'><b>NO PRAZO</b><br><h3>{prazo}</h3></div>", unsafe_allow_html=True)
-    c4.markdown(f"<div style='border-left:6px solid green;padding:15px;background:#f2f2f2;border-radius:10px'><b>CONCLUÍDO</b><br><h3>{concluido}</h3></div>", unsafe_allow_html=True)
+# =============================
+# ALERTA DETALHADO
+# =============================
 
-    # ===== GRÁFICO MENOR =====
-    st.subheader("📊 Valor por Fornecedor")
+vencidos = df_view[df_view["sla"]=="vencido"]
 
-    graf = df.groupby("fornecedor")["valor"].sum()
+if not vencidos.empty:
+    soma = vencidos["valor"].sum()
 
-    fig, ax = plt.subplots(figsize=(5,4))
-    ax.bar(graf.index, graf.values)
-    plt.xticks(rotation=45)
+    nomes = "\n".join([
+        f"- {r['fornecedor']} | Fatura: {r['fatura']} | Venc: {pd.to_datetime(r['vencimento']).date()} | R$ {r['valor']:,.2f}"
+        for _, r in vencidos.iterrows()
+    ])
+
+    st.error(f"""
+⚠️ {len(vencidos)} faturas vencidas — Total R$ {soma:,.2f}
+
+{nomes}
+""")
+
+# =============================
+# GRÁFICO PIZZA
+# =============================
+
+if not df_view.empty:
+    graf=df_view.groupby("fornecedor")["valor"].sum().sort_values(ascending=False)
+
+    st.subheader("📊 Distribuição de Valores por Fornecedor")
+
+    fig, ax = plt.subplots()
+    ax.pie(
+        graf,
+        labels=graf.index,
+        autopct='%1.1f%%',
+        startangle=90
+    )
+    ax.axis("equal")
+
     st.pyplot(fig)
 
-# ==============================
-# FORMULÁRIO COM 3 ABAS
-# ==============================
+# =============================
+# REGISTROS VISUAIS
+# =============================
 
 st.divider()
-st.subheader("Nova Fatura")
+st.subheader("📁 Registros")
 
-tab1, tab2, tab3 = st.tabs([
-    "Registro da Fatura",
-    "Pedido de Compra",
-    "Chamado V360"
-])
+if not df_view.empty:
 
-with tab1:
-    fornecedor = st.text_input("Fornecedor")
-    fatura = st.text_input("Número da Fatura")
-    valor = st.number_input("Valor", min_value=0.0, format="%.2f")
-    vencimento = st.date_input("Vencimento")
-    cnpj = st.text_input("CNPJ")
-    status = st.selectbox("Status", ["Em andamento","Concluído"])
-
-with tab2:
-    codigo_servico = st.text_input("Pedido de compras Heflo")
-    data_abertura = st.date_input("Data Abertura")
-
-with tab3:
-    codigo_pedido = st.text_input("Código Chamado V360")
-    data_chamado = st.date_input("Data Chamado")
-
-if st.button("Salvar"):
-
-    nova = {
-        "status":status,
-        "fornecedor":fornecedor,
-        "fatura":fatura,
-        "vencimento":str(vencimento),
-        "valor":valor,
-        "cnpj":cnpj,
-        "codigo_servico":codigo_servico,
-        "data_abertura":str(data_abertura),
-        "codigo_pedido":codigo_pedido,
-        "data_chamado":str(data_chamado)
+    status_cor = {
+        "Concluído": "#1f8f4c",
+        "Em andamento": "#fbc02d"
     }
 
-    df = pd.concat([df,pd.DataFrame([nova])],ignore_index=True)
-    salvar(df)
-    st.session_state.df = df
-    st.success("Salvo com sucesso!")
-    st.rerun()
+    sla_cor = {
+        "vencido": "#e53935",
+        "vence em breve": "#fbc02d",
+        "no prazo": "#1e88e5",
+        "concluido": "#43a047"
+    }
+
+    for i,row in df_view.iterrows():
+
+        with st.expander(f"📄 {row['fornecedor']} — {row['vencimento'].date()}"):
+
+            st.markdown(f"""
+<div style="padding:15px;border-radius:12px;
+border-left:8px solid {status_cor.get(row['status'],'gray')};
+background:#f9f9f9">
+
+<b>Status:</b> <span style="color:{status_cor.get(row['status'],'black')};font-weight:600">
+{row['status']}
+</span><br>
+
+<b>SLA:</b> <span style="color:{sla_cor.get(row['sla'],'black')};font-weight:600">
+{row['sla']}
+</span><br><br>
+
+<b>Fatura:</b> {row['fatura']}<br>
+<b>Valor:</b> R$ {row['valor']:,.2f}<br>
+<b>CNPJ:</b> {row['cnpj']}<br>
+<b>Pedido de compras Heflo:</b> {row['codigo_servico']}<br>
+<b>Data Abertura:</b> {row['data_abertura']}<br>
+<b>Código Pedido:</b> {row['codigo_pedido']}<br>
+<b>Data Chamado:</b> {row['data_chamado']}
+</div>
+""", unsafe_allow_html=True)
+
+            if st.button("✏️ Editar",key=f"e{i}"):
+                st.session_state.edit_id=i
+                st.session_state.temp=row.to_dict()
+                st.session_state.etapa=1
+                st.session_state.mostrar_nova=True
+                st.rerun()
+
+            if st.button("🗑️ Excluir",key=f"d{i}"):
+                df.drop(i,inplace=True)
+                salvar(df)
+                st.rerun()
+
+# =============================
+# NOVA FATURA / EDIÇÃO
+# =============================
+
+st.divider()
+
+if st.button("Nova Fatura +"):
+    st.session_state.mostrar_nova=True
+    st.session_state.edit_id=None
+
+if st.session_state.mostrar_nova:
+
+    st.subheader("🧾 Cadastro / Edição de Fatura")
+
+    temp = st.session_state.get("temp", {})
+
+    status=st.selectbox("Status",["Em andamento","Concluído"],
+                        index=0 if temp.get("status","Em andamento")=="Em andamento" else 1)
+
+    forn=st.text_input("Fornecedor",value=temp.get("fornecedor",""))
+    fat=st.text_input("Fatura",value=temp.get("fatura",""))
+    venc=st.date_input("Vencimento",
+                       pd.to_datetime(temp.get("vencimento",date.today())))
+
+    val=st.number_input("Valor",value=float(temp.get("valor",0.0)))
+    cnpj=st.text_input("CNPJ",value=temp.get("cnpj",""))
+
+    cod=st.text_input("Pedido de compras Heflo",
+                      value=temp.get("codigo_servico",""))
+
+    dab=st.date_input("Data abertura",
+                      pd.to_datetime(temp.get("data_abertura",date.today())))
+
+    ped=st.text_input("Código Pedido",
+                      value=temp.get("codigo_pedido",""))
+
+    dch=st.date_input("Data chamado",
+                      pd.to_datetime(temp.get("data_chamado",date.today())))
+
+    if st.button("💾 Salvar"):
+        nova_linha={
+            "status":status,
+            "fornecedor":forn,
+            "fatura":fat,
+            "vencimento":str(venc),
+            "valor":val,
+            "cnpj":cnpj,
+            "codigo_servico":cod,
+            "data_abertura":str(dab),
+            "codigo_pedido":ped,
+            "data_chamado":str(dch)
+        }
+
+        if st.session_state.edit_id is not None:
+            df.loc[st.session_state.edit_id]=nova_linha
+        else:
+            df=pd.concat([df,pd.DataFrame([nova_linha])],ignore_index=True)
+
+        salvar(df)
+        st.session_state.df=df
+        st.session_state.mostrar_nova=False
+        st.success("Salvo com sucesso!")
+        st.rerun()
