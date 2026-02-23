@@ -3,16 +3,12 @@ import sqlite3
 import pandas as pd
 from datetime import date
 
-# ==============================
-# CONFIGURAÇÃO
-# ==============================
-
 st.set_page_config(layout="wide")
 st.title("Gestão de Faturas")
 
-# ==============================
+# ==========================
 # BANCO
-# ==============================
+# ==========================
 
 conn = sqlite3.connect("faturas.db", check_same_thread=False)
 cursor = conn.cursor()
@@ -30,9 +26,9 @@ CREATE TABLE IF NOT EXISTS invoices (
 """)
 conn.commit()
 
-# ==============================
-# LISTAS (BLOCO 2)
-# ==============================
+# ==========================
+# LISTAS
+# ==========================
 
 FORNECEDORES = [
     "E-SALES",
@@ -44,109 +40,106 @@ FORNECEDORES = [
     "FUSION"
 ]
 
-# ==============================
+# ==========================
 # ESTADO
-# ==============================
+# ==========================
 
-if "mostrar_formulario" not in st.session_state:
-    st.session_state.mostrar_formulario = False
+if "modo_form" not in st.session_state:
+    st.session_state.modo_form = None  # None | novo | editar
 
-if "etapa" not in st.session_state:
-    st.session_state.etapa = 1
+if "edit_id" not in st.session_state:
+    st.session_state.edit_id = None
 
-# ==============================
+# ==========================
+# FUNÇÕES
+# ==========================
+
+def limpar_campos():
+    for key in [
+        "fornecedor",
+        "numero_fatura",
+        "valor",
+        "vencimento",
+        "numero_heflo",
+        "numero_v360"
+    ]:
+        if key in st.session_state:
+            del st.session_state[key]
+
+# ==========================
 # BOTÃO NOVA FATURA
-# ==============================
+# ==========================
 
 if st.button("Nova Fatura"):
-    st.session_state.mostrar_formulario = True
-    st.session_state.etapa = 1
+    st.session_state.modo_form = "novo"
+    st.session_state.edit_id = None
+    limpar_campos()
+    st.rerun()
 
-# ==============================
-# FORMULÁRIO SEQUENCIAL
-# ==============================
+# ==========================
+# FORMULÁRIO UNIFICADO
+# ==========================
 
-if st.session_state.mostrar_formulario:
+if st.session_state.modo_form in ["novo", "editar"]:
 
-    abas = st.tabs(["Cadastro de Fatura", "Requisição Heflo", "Chamado V360"])
+    st.subheader("Cadastro de Fatura")
 
-    # ==============================
-    # ABA 1
-    # ==============================
-    with abas[0]:
-        fornecedor = st.selectbox("Fornecedor", FORNECEDORES, key="fornecedor")
-        numero_fatura = st.text_input("Número da Fatura", key="numero_fatura")
-        valor = st.number_input("Valor", min_value=0.0, format="%.2f", key="valor")
-        vencimento = st.date_input("Vencimento", value=date.today(), key="vencimento")
+    fornecedor = st.selectbox(
+        "Fornecedor",
+        FORNECEDORES,
+        key="fornecedor"
+    )
 
-        if st.button("Próximo → Heflo"):
-            st.session_state.etapa = 2
-            st.rerun()
+    numero_fatura = st.text_input("Número da Fatura", key="numero_fatura")
+    valor = st.number_input("Valor", min_value=0.0, format="%.2f", key="valor")
+    vencimento = st.date_input("Vencimento", key="vencimento")
+    numero_heflo = st.text_input("Número Heflo", key="numero_heflo")
+    numero_v360 = st.text_input("Número Chamado V360", key="numero_v360")
 
-    # ==============================
-    # ABA 2
-    # ==============================
-    with abas[1]:
-        if st.session_state.etapa >= 2:
-            numero_heflo = st.text_input("Número Heflo", key="numero_heflo")
+    col1, col2 = st.columns(2)
 
-            if st.button("Próximo → V360"):
-                st.session_state.etapa = 3
-                st.rerun()
-        else:
-            st.info("Preencha a Aba 1 primeiro.")
+    with col1:
+        if st.button("Salvar" if st.session_state.modo_form == "novo" else "Atualizar"):
 
-    # ==============================
-    # ABA 3
-    # ==============================
-    with abas[2]:
-        if st.session_state.etapa >= 3:
-            numero_v360 = st.text_input("Número Chamado V360", key="numero_v360")
-
-            if st.button("Salvar Fatura Completa"):
+            if st.session_state.modo_form == "novo":
                 cursor.execute("""
                     INSERT INTO invoices (
-                        fornecedor,
-                        numero_fatura,
-                        valor,
-                        vencimento,
-                        numero_heflo,
-                        numero_v360
-                    )
-                    VALUES (?, ?, ?, ?, ?, ?)
+                        fornecedor, numero_fatura, valor,
+                        vencimento, numero_heflo, numero_v360
+                    ) VALUES (?, ?, ?, ?, ?, ?)
                 """, (
-                    st.session_state.fornecedor,
-                    st.session_state.numero_fatura,
-                    st.session_state.valor,
-                    st.session_state.vencimento,
-                    st.session_state.numero_heflo,
-                    st.session_state.numero_v360
+                    fornecedor, numero_fatura, valor,
+                    vencimento, numero_heflo, numero_v360
                 ))
-                conn.commit()
+            else:
+                cursor.execute("""
+                    UPDATE invoices
+                    SET fornecedor=?, numero_fatura=?, valor=?,
+                        vencimento=?, numero_heflo=?, numero_v360=?
+                    WHERE id=?
+                """, (
+                    fornecedor, numero_fatura, valor,
+                    vencimento, numero_heflo, numero_v360,
+                    st.session_state.edit_id
+                ))
 
-                # LIMPAR CAMPOS
-                for key in [
-                    "fornecedor",
-                    "numero_fatura",
-                    "valor",
-                    "vencimento",
-                    "numero_heflo",
-                    "numero_v360"
-                ]:
-                    if key in st.session_state:
-                        del st.session_state[key]
+            conn.commit()
 
-                st.session_state.mostrar_formulario = False
-                st.session_state.etapa = 1
+            limpar_campos()
+            st.session_state.modo_form = None
+            st.session_state.edit_id = None
+            st.rerun()
 
-                st.success("Fatura salva com sucesso!")
-                st.rerun()
-        else:
-            st.info("Finalize a Aba 2 primeiro.")
+    with col2:
+        if st.button("Cancelar"):
+            limpar_campos()
+            st.session_state.modo_form = None
+            st.session_state.edit_id = None
+            st.rerun()
 
-# ==============================
+# ==========================
 # TABELA
-# ==============================
+# ==========================
 
 st.divider()
 st.subheader("Faturas Registradas")
@@ -158,41 +151,38 @@ if not df.empty:
     edited_df = st.data_editor(
         df,
         use_container_width=True,
-        num_rows="dynamic"
+        num_rows="dynamic",
+        key="tabela"
     )
 
-    # SALVAR ALTERAÇÕES
-    if st.button("Salvar Alterações"):
-        for _, row in edited_df.iterrows():
-            cursor.execute("""
-                UPDATE invoices
-                SET fornecedor = ?, numero_fatura = ?, valor = ?, vencimento = ?,
-                    numero_heflo = ?, numero_v360 = ?
-                WHERE id = ?
-            """, (
-                row["fornecedor"],
-                row["numero_fatura"],
-                row["valor"],
-                row["vencimento"],
-                row["numero_heflo"],
-                row["numero_v360"],
-                row["id"]
-            ))
-        conn.commit()
-        st.success("Alterações salvas.")
-        st.rerun()
+    # DETECTAR EXCLUSÕES
+    ids_originais = set(df["id"])
+    ids_atuais = set(edited_df["id"])
 
-    # EXCLUIR REGISTROS REMOVIDOS
-    ids_atuais = set(df["id"])
-    ids_editados = set(edited_df["id"])
-
-    ids_removidos = ids_atuais - ids_editados
+    ids_removidos = ids_originais - ids_atuais
 
     if ids_removidos:
-        for id_removido in ids_removidos:
-            cursor.execute("DELETE FROM invoices WHERE id = ?", (id_removido,))
+        for id_del in ids_removidos:
+            cursor.execute("DELETE FROM invoices WHERE id=?", (id_del,))
         conn.commit()
         st.rerun()
 
+    # DETECTAR CLIQUE PARA EDITAR
+    if st.button("Editar Selecionado"):
+        if len(edited_df) > 0:
+            selected_row = edited_df.iloc[0]  # primeira linha
+
+            st.session_state.modo_form = "editar"
+            st.session_state.edit_id = selected_row["id"]
+
+            st.session_state.fornecedor = selected_row["fornecedor"]
+            st.session_state.numero_fatura = selected_row["numero_fatura"]
+            st.session_state.valor = selected_row["valor"]
+            st.session_state.vencimento = pd.to_datetime(selected_row["vencimento"]).date()
+            st.session_state.numero_heflo = selected_row["numero_heflo"]
+            st.session_state.numero_v360 = selected_row["numero_v360"]
+
+            st.rerun()
+
 else:
-    st.info("Nenhuma fatura cadastrada ainda.")
+    st.info("Nenhuma fatura cadastrada.")
